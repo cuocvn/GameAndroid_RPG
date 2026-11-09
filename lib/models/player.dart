@@ -11,6 +11,7 @@ class Player {
   final int level;
   final int currentExp;
   final int gold;
+  final int gems; // Đá quý nâng cấp trang bị
   final int statPoints;
   final int skillPoints;
   final Stats stats;
@@ -24,10 +25,19 @@ class Player {
   final Map<String, int> skillLevels;
   // List of active/basic skill IDs set for battle
   final List<String> equippedSkillIds;
+  final int unlockedSkillSlots; // Default 4, can expand to 5
 
   final int maxUnlockedZone;
   final int currentZone;
   final int currentStage;
+
+  // Track unique beaten stages (e.g. ['z1_s1', 'z1_s2']) for milestone rewards
+  final List<String> clearedStages;
+
+  // Tutorial tracking (shown once)
+  final bool hasSeenTutorialHome;
+  final bool hasSeenTutorialFirstWin;
+  final bool hasSeenTutorialFirstDrop;
 
   const Player({
     this.name = 'Cyra',
@@ -36,10 +46,11 @@ class Player {
     this.battleSpriteAsset = AssetMapping.heroBattleSprite,
     this.level = 1,
     this.currentExp = 0,
-    this.gold = 100,
-    this.statPoints = 5,
+    this.gold = 50,
+    this.gems = 3,
+    this.statPoints = 2, // Giảm còn 2 điểm chỉ số ban đầu
     this.skillPoints = 1,
-    this.stats = const Stats(str: 5, int_: 12, vit: 8, agi: 6, luk: 5),
+    this.stats = const Stats(str: 5, int_: 10, vit: 8, agi: 6, luk: 5),
     this.equippedWeapon,
     this.equippedArmor,
     this.equippedAccessory,
@@ -53,9 +64,14 @@ class Player {
       'fireball',
       'meteor',
     ],
+    this.unlockedSkillSlots = 4,
     this.maxUnlockedZone = 1,
     this.currentZone = 1,
     this.currentStage = 1,
+    this.clearedStages = const [],
+    this.hasSeenTutorialHome = false,
+    this.hasSeenTutorialFirstWin = false,
+    this.hasSeenTutorialFirstDrop = false,
   });
 
   /// Required EXP to level up
@@ -73,13 +89,13 @@ class Player {
   // --- Derived combat numbers ---
 
   int get maxHp {
-    final base = totalStats.maxHp + (equippedArmor?.flatHp ?? 0);
+    final base = totalStats.maxHp + (equippedArmor?.effectiveFlatHp ?? 0);
     final hpBonus = (skillLevels['vital_body'] ?? 0) * 0.10; // +10% per level
     return (base * (1.0 + hpBonus)).round();
   }
 
   double get physicalDef {
-    final base = totalStats.physicalDef + (equippedArmor?.flatDef ?? 0);
+    final base = totalStats.physicalDef + (equippedArmor?.effectiveFlatDef ?? 0);
     final defBonus = (skillLevels['vital_body'] ?? 0) * 3.0;
     return base + defBonus;
   }
@@ -97,11 +113,11 @@ class Player {
   /// Damage formulas:
   /// Physical ATK = STR * 2.5 + Weapon
   double get physicalAtk =>
-      (totalStats.str * 2.5) + (equippedWeapon?.flatAtk ?? 0);
+      (totalStats.str * 2.5) + (equippedWeapon?.effectiveFlatAtk ?? 0);
 
   /// Magic ATK = INT * 3.0 + Weapon
   double get magicAtk =>
-      (totalStats.int_ * 3.0) + (equippedWeapon?.flatAtk ?? 0);
+      (totalStats.int_ * 3.0) + (equippedWeapon?.effectiveFlatAtk ?? 0);
 
   /// Crit Rate: LUK * 0.5% + Equipment + Passives (capped at 50%)
   double get critRate {
@@ -154,6 +170,7 @@ class Player {
     int? level,
     int? currentExp,
     int? gold,
+    int? gems,
     int? statPoints,
     int? skillPoints,
     Stats? stats,
@@ -166,9 +183,14 @@ class Player {
     List<Equipment>? inventory,
     Map<String, int>? skillLevels,
     List<String>? equippedSkillIds,
+    int? unlockedSkillSlots,
     int? maxUnlockedZone,
     int? currentZone,
     int? currentStage,
+    List<String>? clearedStages,
+    bool? hasSeenTutorialHome,
+    bool? hasSeenTutorialFirstWin,
+    bool? hasSeenTutorialFirstDrop,
   }) {
     return Player(
       name: name ?? this.name,
@@ -178,6 +200,7 @@ class Player {
       level: level ?? this.level,
       currentExp: currentExp ?? this.currentExp,
       gold: gold ?? this.gold,
+      gems: gems ?? this.gems,
       statPoints: statPoints ?? this.statPoints,
       skillPoints: skillPoints ?? this.skillPoints,
       stats: stats ?? this.stats,
@@ -187,9 +210,14 @@ class Player {
       inventory: inventory ?? this.inventory,
       skillLevels: skillLevels ?? this.skillLevels,
       equippedSkillIds: equippedSkillIds ?? this.equippedSkillIds,
+      unlockedSkillSlots: unlockedSkillSlots ?? this.unlockedSkillSlots,
       maxUnlockedZone: maxUnlockedZone ?? this.maxUnlockedZone,
       currentZone: currentZone ?? this.currentZone,
       currentStage: currentStage ?? this.currentStage,
+      clearedStages: clearedStages ?? this.clearedStages,
+      hasSeenTutorialHome: hasSeenTutorialHome ?? this.hasSeenTutorialHome,
+      hasSeenTutorialFirstWin: hasSeenTutorialFirstWin ?? this.hasSeenTutorialFirstWin,
+      hasSeenTutorialFirstDrop: hasSeenTutorialFirstDrop ?? this.hasSeenTutorialFirstDrop,
     );
   }
 
@@ -201,6 +229,7 @@ class Player {
         'level': level,
         'currentExp': currentExp,
         'gold': gold,
+        'gems': gems,
         'statPoints': statPoints,
         'skillPoints': skillPoints,
         'stats': stats.toJson(),
@@ -210,9 +239,14 @@ class Player {
         'inventory': inventory.map((e) => e.toJson()).toList(),
         'skillLevels': skillLevels,
         'equippedSkillIds': equippedSkillIds,
+        'unlockedSkillSlots': unlockedSkillSlots,
         'maxUnlockedZone': maxUnlockedZone,
         'currentZone': currentZone,
         'currentStage': currentStage,
+        'clearedStages': clearedStages,
+        'hasSeenTutorialHome': hasSeenTutorialHome,
+        'hasSeenTutorialFirstWin': hasSeenTutorialFirstWin,
+        'hasSeenTutorialFirstDrop': hasSeenTutorialFirstDrop,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -222,12 +256,13 @@ class Player {
         battleSpriteAsset: json['battleSpriteAsset'] as String? ?? AssetMapping.heroBattleSprite,
         level: json['level'] as int? ?? 1,
         currentExp: json['currentExp'] as int? ?? 0,
-        gold: json['gold'] as int? ?? 100,
-        statPoints: json['statPoints'] as int? ?? 5,
+        gold: json['gold'] as int? ?? 50,
+        gems: json['gems'] as int? ?? 3,
+        statPoints: json['statPoints'] as int? ?? 2,
         skillPoints: json['skillPoints'] as int? ?? 1,
         stats: json['stats'] != null
             ? Stats.fromJson(json['stats'] as Map<String, dynamic>)
-            : const Stats(str: 5, int_: 12, vit: 8, agi: 6, luk: 5),
+            : const Stats(str: 5, int_: 10, vit: 8, agi: 6, luk: 5),
         equippedWeapon: json['equippedWeapon'] != null
             ? Equipment.fromJson(json['equippedWeapon'] as Map<String, dynamic>)
             : null,
@@ -249,8 +284,16 @@ class Player {
                 ?.map((e) => e as String)
                 .toList() ??
             ['fireball', 'meteor'],
+        unlockedSkillSlots: json['unlockedSkillSlots'] as int? ?? 4,
         maxUnlockedZone: json['maxUnlockedZone'] as int? ?? 1,
         currentZone: json['currentZone'] as int? ?? 1,
         currentStage: json['currentStage'] as int? ?? 1,
+        clearedStages: (json['clearedStages'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            [],
+        hasSeenTutorialHome: json['hasSeenTutorialHome'] as bool? ?? false,
+        hasSeenTutorialFirstWin: json['hasSeenTutorialFirstWin'] as bool? ?? false,
+        hasSeenTutorialFirstDrop: json['hasSeenTutorialFirstDrop'] as bool? ?? false,
       );
 }

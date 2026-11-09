@@ -13,7 +13,7 @@ class SaveService {
       await Hive.initFlutter();
       _box = await Hive.openBox('game_save');
     } catch (e) {
-      // SharedPreferences will act as fallback
+      // SharedPreferences acts as fallback
     }
   }
 
@@ -55,7 +55,7 @@ class SaveService {
       } catch (_) {}
     }
 
-    // Default starter player with starter gear
+    // Default starter player with humble starter gear (no free legendaries in bag)
     final starterWeapon = SeedEquipment.getById('wooden_staff');
     final starterArmor = SeedEquipment.getById('cloth_armor');
     final starterRing = SeedEquipment.getById('apprentice_ring');
@@ -64,12 +64,11 @@ class SaveService {
       equippedWeapon: starterWeapon,
       equippedArmor: starterArmor,
       equippedAccessory: starterRing,
-      inventory: [
-        SeedEquipment.getById('iron_sword'),
-        SeedEquipment.getById('speed_boots'),
-        // Let player taste Sacred Soul Ring in inventory so they can build synergy early!
-        SeedEquipment.getById('sacred_soul_ring'),
-      ],
+      inventory: const [], // Túi đồ khởi đầu trống, người chơi phải chiến đấu và cày cuốc
+      gold: 50,
+      gems: 3,
+      statPoints: 2, // 2 điểm cộng khởi đầu
+      skillPoints: 1,
     );
   }
 

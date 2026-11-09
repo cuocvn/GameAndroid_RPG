@@ -7,6 +7,7 @@ class EquipmentCard extends StatelessWidget {
   final bool isEquipped;
   final VoidCallback? onEquip;
   final VoidCallback? onUnequip;
+  final VoidCallback? onUpgrade;
   final VoidCallback? onSell;
 
   const EquipmentCard({
@@ -15,6 +16,7 @@ class EquipmentCard extends StatelessWidget {
     this.isEquipped = false,
     this.onEquip,
     this.onUnequip,
+    this.onUpgrade,
     this.onSell,
   });
 
@@ -95,27 +97,34 @@ class EquipmentCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  item.description,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 2),
 
-                // Stat Bonuses Row
+                // Upgrade Level tag
+                Row(
+                  children: [
+                    Text(
+                      'Cấp ${item.upgradeLevel}/${item.maxUpgradeLevel} (+${item.upgradeLevel * 10}%)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: item.upgradeLevel > 0 ? Colors.amberAccent : Colors.white60,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+
+                // Stat Bonuses Row (effective with upgrade bonuses)
                 Wrap(
-                  spacing: 8,
+                  spacing: 6,
                   runSpacing: 4,
                   children: [
                     if (item.flatAtk > 0)
-                      _statTag('⚔️ +${item.flatAtk} ATK', Colors.orangeAccent),
+                      _statTag('⚔️ +${item.effectiveFlatAtk} ATK', Colors.orangeAccent),
                     if (item.flatDef > 0)
-                      _statTag('🛡️ +${item.flatDef} DEF', Colors.lightBlueAccent),
+                      _statTag('🛡️ +${item.effectiveFlatDef} DEF', Colors.lightBlueAccent),
                     if (item.flatHp > 0)
-                      _statTag('❤️ +${item.flatHp} HP', Colors.greenAccent),
+                      _statTag('❤️ +${item.effectiveFlatHp} HP', Colors.greenAccent),
                     if (item.fireDmgPercent > 0)
                       _statTag('🔥 +${(item.fireDmgPercent * 100).round()}% Lửa', Colors.redAccent),
                     if (item.critRate > 0)
@@ -147,34 +156,55 @@ class EquipmentCard extends StatelessWidget {
                   onPressed: onUnequip,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey.shade800,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    minimumSize: const Size(60, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(60, 28),
                   ),
-                  child: const Text('Tháo', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  child: const Text('Tháo', style: TextStyle(fontSize: 11, color: Colors.white70)),
                 )
               else
                 ElevatedButton(
                   onPressed: onEquip,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber.shade800,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    minimumSize: const Size(60, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(60, 28),
                   ),
-                  child: const Text('Dùng', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: const Text('Mặc', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
+
+              // Upgrade Button
+              if (onUpgrade != null && item.upgradeLevel < item.maxUpgradeLevel) ...[
+                const SizedBox(height: 4),
+                OutlinedButton(
+                  onPressed: onUpgrade,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.amberAccent),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    minimumSize: const Size(60, 26),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('⚡ ', style: TextStyle(fontSize: 10)),
+                      Text('${item.upgradeGoldCost}🪙', style: const TextStyle(fontSize: 9.5, color: Colors.amberAccent)),
+                    ],
+                  ),
+                ),
+              ],
+
               if (!isEquipped && onSell != null) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 InkWell(
                   onTap: onSell,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.red.shade900.withOpacity(0.4),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      'Bán (${item.sellPrice}g)',
-                      style: const TextStyle(fontSize: 10, color: Colors.amberAccent),
+                      'Bán (${item.sellPrice}🪙)',
+                      style: const TextStyle(fontSize: 9.5, color: Colors.amberAccent),
                     ),
                   ),
                 ),

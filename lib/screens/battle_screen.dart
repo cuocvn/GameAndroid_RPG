@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_enemies.dart';
+import '../data/seed_skills.dart';
 import '../models/battle_state.dart';
 import '../models/enemy.dart';
 import '../models/equipment.dart';
+import '../models/player.dart';
+import '../models/skill.dart';
 import '../providers/game_providers.dart';
 import '../services/battle_service.dart';
 import '../widgets/damage_text_widget.dart';
@@ -30,6 +33,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   BattleState? _currentState;
   late Enemy _enemy;
   bool _dialogShown = false;
+  MilestoneRewardResult? _milestoneResult;
 
   @override
   void initState() {
@@ -39,6 +43,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
 
   void _startBattle() {
     _dialogShown = false;
+    _milestoneResult = null;
     final player = ref.read(playerProvider);
     _enemy = SeedEnemies.getEnemy(widget.zoneId, widget.stage);
 
@@ -69,17 +74,20 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
     if (_dialogShown) return;
     _dialogShown = true;
 
+    final player = ref.read(playerProvider);
+
     if (state.isWon) {
-      ref.read(playerProvider.notifier).onBattleVictory(
+      _milestoneResult = ref.read(playerProvider.notifier).onBattleVictory(
             exp: state.earnedExp,
             gold: state.earnedGold,
             drops: state.droppedEquipment,
             foughtZone: widget.zoneId,
             foughtStage: widget.stage,
           );
-      _showResultDialog(isWon: true, state: state);
+
+      _showResultDialog(isWon: true, state: state, previousPlayer: player);
     } else if (state.isDefeated) {
-      _showResultDialog(isWon: false, state: state);
+      _showResultDialog(isWon: false, state: state, previousPlayer: player);
     }
   }
 
@@ -160,8 +168,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                   children: [
                     // --- BATTLE ARENA (Hero vs Monster) ---
                     Container(
-                      height: 290,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      height: 270,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
@@ -170,9 +178,6 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                             Colors.black.withOpacity(0.4),
                             Colors.black.withOpacity(0.85),
                           ],
-                        ),
-                        border: const Border(
-                          bottom: BorderSide(color: Colors.white12, width: 1),
                         ),
                       ),
                       child: Row(
@@ -186,16 +191,16 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                   player.name,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     color: Colors.white,
                                   ),
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
 
                                 // Hero Sprite
                                 Container(
-                                  width: 110,
-                                  height: 120,
+                                  width: 100,
+                                  height: 110,
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
@@ -211,14 +216,14 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                     fallbackEmoji: '🧙‍♀️',
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
 
                                 // Hero HP Bar
                                 HpBar(
                                   currentHp: state.heroHp,
                                   maxHp: state.heroMaxHp,
                                   shield: state.heroShield,
-                                  height: 16,
+                                  height: 15,
                                 ),
                                 const SizedBox(height: 4),
 
@@ -236,7 +241,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),
                             child: Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(7),
                               decoration: BoxDecoration(
                                 color: Colors.red.shade900,
                                 shape: BoxShape.circle,
@@ -247,7 +252,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                 ),
                               ),
                             ),
@@ -267,7 +272,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                         state.enemy.name,
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                          fontSize: 12.5,
                                           color: state.enemy.isBoss ? Colors.amberAccent : Colors.white,
                                         ),
                                         maxLines: 1,
@@ -276,12 +281,12 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
 
                                 // Monster Image
                                 Container(
-                                  width: 110,
-                                  height: 120,
+                                  width: 100,
+                                  height: 110,
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
@@ -306,13 +311,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
 
                                 // Monster HP Bar
                                 HpBar(
                                   currentHp: state.enemy.currentHp,
                                   maxHp: state.enemy.maxHp,
-                                  height: 16,
+                                  height: 15,
                                 ),
                                 const SizedBox(height: 4),
 
@@ -326,15 +331,78 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                     ),
                                     child: Text(
                                       '🔥 Thiêu đốt (${state.enemy.burnTicksLeft}s)',
-                                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(fontSize: 9.5, color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   )
                                 else
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 14),
                               ],
                             ),
                           ),
                         ],
+                      ),
+                    ),
+
+                    // --- ACTIVE SKILL BAR (Issue 4: Icon, Mana, Ready Glow) ---
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.85),
+                        border: const Border(
+                          top: BorderSide(color: Colors.white12),
+                          bottom: BorderSide(color: Colors.white12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: player.equippedSkillIds.map((skillId) {
+                          final skill = SeedSkills.getById(skillId);
+                          final isReady = skill.type == SkillType.active && state.heroMana >= skill.manaCost;
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isReady ? Colors.orange.shade900.withOpacity(0.4) : Colors.grey.shade900,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isReady ? Colors.amberAccent : Colors.white24,
+                                width: isReady ? 1.8 : 1,
+                              ),
+                              boxShadow: isReady
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.amberAccent.withOpacity(0.4),
+                                        blurRadius: 6,
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                Text(skill.emoji, style: const TextStyle(fontSize: 16)),
+                                const SizedBox(width: 4),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      skill.name,
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: isReady ? Colors.amberAccent : Colors.white70,
+                                      ),
+                                    ),
+                                    if (skill.manaCost > 0)
+                                      Text(
+                                        '💧 ${skill.manaCost}',
+                                        style: const TextStyle(fontSize: 8.5, color: Colors.cyanAccent),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ),
 
@@ -360,7 +428,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                 ),
                               ],
                             ),
-                            const Divider(color: Colors.white24, height: 12),
+                            const Divider(color: Colors.white24, height: 10),
                             Expanded(
                               child: ListView.builder(
                                 itemCount: state.battleLog.length,
@@ -369,15 +437,16 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                                   Color textColor = Colors.white70;
                                   if (msg.contains('CHIẾN THẮNG')) textColor = Colors.greenAccent;
                                   if (msg.contains('THẤT BẠI')) textColor = Colors.redAccent;
-                                  if (msg.contains('CHÍ MẠNG')) textColor = Colors.amberAccent;
+                                  if (msg.contains('CHÍ MẠNG') || msg.contains('CRIT')) textColor = Colors.amberAccent;
                                   if (msg.contains('thiêu đốt')) textColor = Colors.orangeAccent;
                                   if (msg.contains('kích hoạt')) textColor = Colors.cyanAccent;
+                                  if (msg.contains('phản đòn')) textColor = Colors.purpleAccent;
 
                                   return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    padding: const EdgeInsets.symmetric(vertical: 1.5),
                                     child: Text(
                                       '• $msg',
-                                      style: TextStyle(fontSize: 11.5, color: textColor),
+                                      style: TextStyle(fontSize: 11, color: textColor),
                                     ),
                                   );
                                 },
@@ -392,12 +461,50 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
 
                 // Floating Damage Overlay
                 FloatingDamageOverlay(texts: state.floatingTexts),
+
+                // Active Skill Banner (Issue 4 item 1: Center Banner for 0.8s)
+                if (state.activeSkillCastName != null)
+                  Positioned(
+                    top: 130,
+                    left: 20,
+                    right: 20,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.amberAccent, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.6),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          state.activeSkillCastName!,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.amberAccent,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
     );
   }
 
-  void _showResultDialog({required bool isWon, required BattleState state}) {
+  void _showResultDialog({
+    required bool isWon,
+    required BattleState state,
+    required Player previousPlayer,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -413,7 +520,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
               isWon ? '🎉 CHIẾN THẮNG! 🎉' : '💀 THẤT BẠI... 💀',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 20,
+                fontSize: 19,
                 color: isWon ? Colors.amberAccent : Colors.redAccent,
               ),
             ),
@@ -427,7 +534,36 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 13, color: Colors.white70),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
+                // Milestone Celebration Banner if triggered
+                if (_milestoneResult != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade900.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.purpleAccent),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          _milestoneResult!.message,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                        ),
+                        if (_milestoneResult!.unlockedSkillName != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '+ [${_milestoneResult!.unlockedSkillName}]',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.greenAccent),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -439,21 +575,21 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                     children: [
                       Column(
                         children: [
-                          const Text('EXP NHẬN', style: TextStyle(fontSize: 10, color: Colors.white60)),
+                          const Text('EXP', style: TextStyle(fontSize: 10, color: Colors.white60)),
                           const SizedBox(height: 2),
                           Text(
                             '+${state.earnedExp}',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.greenAccent),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent),
                           ),
                         ],
                       ),
                       Column(
                         children: [
-                          const Text('VÀNG NHẬN', style: TextStyle(fontSize: 10, color: Colors.white60)),
+                          const Text('VÀNG', style: TextStyle(fontSize: 10, color: Colors.white60)),
                           const SizedBox(height: 2),
                           Text(
                             '+${state.earnedGold} 🪙',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.amberAccent),
                           ),
                         ],
                       ),
@@ -461,12 +597,12 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                   ),
                 ),
                 if (state.droppedEquipment.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   const Text(
                     '🎁 TRANG BỊ RƠI ĐƯỢC:',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amberAccent),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.amberAccent),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   ...state.droppedEquipment.map((item) {
                     return Container(
                       margin: const EdgeInsets.symmetric(vertical: 2),
@@ -491,11 +627,46 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                     );
                   }),
                 ],
+
+                // Tutorial 1st Win Popup trigger
+                if (!previousPlayer.hasSeenTutorialFirstWin) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade900.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amberAccent),
+                    ),
+                    child: const Text(
+                      '💡 Hướng dẫn: Bạn nhận được điểm chỉ số — Hãy vào tab Chỉ số trong Build để nâng cấp!',
+                      style: TextStyle(fontSize: 11, color: Colors.amberAccent),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+                // Tutorial 1st Drop Popup trigger
+                if (state.droppedEquipment.isNotEmpty && !previousPlayer.hasSeenTutorialFirstDrop) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade900.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.greenAccent),
+                    ),
+                    child: const Text(
+                      '💡 Hướng dẫn: Trang bị đã rơi vào Túi đồ — Vào tab Trang bị để mặc hoặc nâng cấp!',
+                      style: TextStyle(fontSize: 11, color: Colors.greenAccent),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ] else ...[
                 const Text(
-                  'Nhân vật của bạn chưa đủ mạnh để vượt qua ải này.\nHãy nâng cấp chỉ số, trang bị và kỹ năng để quay lại phục thù!',
+                  'Nhân vật của bạn chưa đủ mạnh để vượt qua ải này.\nHãy nâng cấp chỉ số, mua đồ trong Cửa Hàng và nâng cấp trang bị để quay lại phục thù!',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.white70),
+                  style: TextStyle(fontSize: 12.5, color: Colors.white70),
                 ),
               ],
             ],
@@ -504,6 +675,12 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
           actions: [
             OutlinedButton(
               onPressed: () {
+                if (!previousPlayer.hasSeenTutorialFirstWin) {
+                  ref.read(playerProvider.notifier).markTutorialFirstWinSeen();
+                }
+                if (state.droppedEquipment.isNotEmpty && !previousPlayer.hasSeenTutorialFirstDrop) {
+                  ref.read(playerProvider.notifier).markTutorialFirstDropSeen();
+                }
                 Navigator.pop(ctx);
                 Navigator.pop(context);
                 Navigator.of(context).push(
@@ -517,8 +694,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
             ),
             ElevatedButton(
               onPressed: () {
+                if (!previousPlayer.hasSeenTutorialFirstWin) {
+                  ref.read(playerProvider.notifier).markTutorialFirstWinSeen();
+                }
+                if (state.droppedEquipment.isNotEmpty && !previousPlayer.hasSeenTutorialFirstDrop) {
+                  ref.read(playerProvider.notifier).markTutorialFirstDropSeen();
+                }
                 Navigator.pop(ctx);
-                // Restart battle
                 setState(() {
                   _startBattle();
                 });

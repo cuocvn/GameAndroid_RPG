@@ -31,15 +31,16 @@ class FloatingDamageOverlay extends StatelessWidget {
               ),
               child: Text(
                 ft.text,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: ft.isCrit ? 26 : 20,
+                  fontSize: ft.isCrit ? 22 : 16,
                   fontWeight: FontWeight.w900,
                   color: ft.color,
-                  shadows: [
+                  shadows: const [
                     Shadow(
                       color: Colors.black,
                       blurRadius: 4,
-                      offset: const Offset(1, 1),
+                      offset: Offset(1, 1),
                     ),
                   ],
                 ),

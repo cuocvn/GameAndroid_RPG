@@ -31,6 +31,11 @@ class Enemy {
   final String fallbackEmoji;
   final EnemySkill? specialSkill;
 
+  // Zone special modifiers
+  final double magicResistPercent; // Vùng 3: Kháng phép 40% (0.40)
+  final double reflectDamagePercent; // Vùng 4: Phản đòn 20% (0.20)
+  final double hpRegenPercentPerSecond; // Vùng 5: Hồi máu 5%/giây (0.05)
+
   // Status effects during combat
   int burnTicksLeft;
   int burnDamagePerTick;
@@ -53,6 +58,9 @@ class Enemy {
     required this.imageAsset,
     this.fallbackEmoji = '👾',
     this.specialSkill,
+    this.magicResistPercent = 0.0,
+    this.reflectDamagePercent = 0.0,
+    this.hpRegenPercentPerSecond = 0.0,
     this.burnTicksLeft = 0,
     this.burnDamagePerTick = 0,
   }) : currentHp = currentHp ?? maxHp;
@@ -81,6 +89,9 @@ class Enemy {
       imageAsset: imageAsset,
       fallbackEmoji: fallbackEmoji,
       specialSkill: specialSkill,
+      magicResistPercent: magicResistPercent,
+      reflectDamagePercent: reflectDamagePercent,
+      hpRegenPercentPerSecond: hpRegenPercentPerSecond,
       burnTicksLeft: 0,
       burnDamagePerTick: 0,
     );

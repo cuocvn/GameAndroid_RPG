@@ -28,6 +28,9 @@ class BattleService {
   double _enemyAttackTimer = 0.0;
   double _manaRegenAccumulator = 0.0;
   double _burnTickAccumulator = 0.0;
+  double _enemyRegenAccumulator = 0.0;
+  double _bannerTimer = 0.0;
+  String? _activeBanner;
 
   // Active skill cooldowns: skillId -> remaining seconds
   final Map<String, double> _cooldowns = {};
@@ -48,11 +51,20 @@ class BattleService {
     _heroMana = 20; // Start battle with a little initial mana
 
     _addLog('Bắt đầu giao chiến với ${enemy.name}!');
+    if (enemy.magicResistPercent > 0) {
+      _addLog('⚠️ Kẻ địch có nội tại [Kháng Phép ${(enemy.magicResistPercent * 100).round()}%]!');
+    }
+    if (enemy.reflectDamagePercent > 0) {
+      _addLog('⚠️ Kẻ địch có nội tại [Phản Đòn ${(enemy.reflectDamagePercent * 100).round()}%]!');
+    }
+    if (enemy.hpRegenPercentPerSecond > 0) {
+      _addLog('⚠️ Kẻ địch có nội tại [Hồi Máu ${(enemy.hpRegenPercentPerSecond * 100).round()}%/giây]!');
+    }
+
     _emitState(isFighting: true);
   }
 
   void start() {
-    // Battle tick every 100 milliseconds
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (_isFinished) {
@@ -79,18 +91,28 @@ class BattleService {
       }
     });
 
-    // 2. Clean up old floating texts
-    _floatingTexts.removeWhere((t) => (DateTime.now().millisecondsSinceEpoch / 1000) - t.createdAt > 1.2);
+    // 2. Banner timer for Active Skills (0.8s)
+    if (_activeBanner != null) {
+      _bannerTimer -= dt;
+      if (_bannerTimer <= 0) {
+        _activeBanner = null;
+      }
+    }
 
-    // 3. Mana Regeneration over time
+    // 3. Clean up old floating texts
+    _floatingTexts.removeWhere(
+        (t) => (DateTime.now().millisecondsSinceEpoch / 1000) - t.createdAt > 1.2);
+
+    // 4. Mana Regeneration over time
     _manaRegenAccumulator += dt;
     if (_manaRegenAccumulator >= 0.5) {
-      final manaGained = (player.manaRegenPerSecond * _manaRegenAccumulator).round();
+      final manaGained =
+          (player.manaRegenPerSecond * _manaRegenAccumulator).round();
       _heroMana = min(_heroMaxMana, _heroMana + manaGained);
       _manaRegenAccumulator = 0.0;
     }
 
-    // 4. Burn Dot on Enemy
+    // 5. Burn Dot on Enemy
     if (enemy.burnTicksLeft > 0) {
       _burnTickAccumulator += dt;
       if (_burnTickAccumulator >= 1.0) {
@@ -98,7 +120,8 @@ class BattleService {
         enemy.burnTicksLeft--;
         final burnDmg = enemy.burnDamagePerTick;
         enemy.currentHp = max(0, enemy.currentHp - burnDmg);
-        _addFloatingText('$burnDmg ♨️', Colors.deepOrangeAccent, isHeroTarget: false);
+        _addFloatingText('$burnDmg ♨️', Colors.deepOrangeAccent,
+            isHeroTarget: false);
         _addLog('${enemy.name} chịu $burnDmg sát thương thiêu đốt.');
 
         if (enemy.isDead) {
@@ -108,7 +131,22 @@ class BattleService {
       }
     }
 
-    // 5. Hero Action Loop
+    // 6. Zone 5 Monster HP Regeneration (5%/second)
+    if (enemy.hpRegenPercentPerSecond > 0 &&
+        enemy.currentHp < enemy.maxHp &&
+        !enemy.isDead) {
+      _enemyRegenAccumulator += dt;
+      if (_enemyRegenAccumulator >= 1.0) {
+        _enemyRegenAccumulator = 0.0;
+        final healVal =
+            max(5, (enemy.maxHp * enemy.hpRegenPercentPerSecond).round());
+        enemy.currentHp = min(enemy.maxHp, enemy.currentHp + healVal);
+        _addFloatingText('+$healVal 💚', Colors.greenAccent, isHeroTarget: false);
+        _addLog('${enemy.name} kích hoạt Hồi Máu +$healVal HP.');
+      }
+    }
+
+    // 7. Hero Action Loop
     _heroAttackTimer += dt;
     final heroInterval = player.attackInterval;
     if (_heroAttackTimer >= heroInterval) {
@@ -120,7 +158,7 @@ class BattleService {
       }
     }
 
-    // 6. Enemy Action Loop
+    // 8. Enemy Action Loop
     _enemyAttackTimer += dt;
     final enemyInterval = enemy.attackInterval;
     if (_enemyAttackTimer >= enemyInterval) {
@@ -136,8 +174,6 @@ class BattleService {
   }
 
   void _executeHeroAction() {
-    // Determine skill to cast:
-    // Check equipped skills in order of priority:
     Skill? chosenSkill;
 
     for (final skillId in player.equippedSkillIds) {
@@ -150,27 +186,36 @@ class BattleService {
           break;
         }
       } else if (skill.type == SkillType.basic && chosenSkill == null) {
-        // Fallback basic skill
         chosenSkill = skill;
       }
     }
 
-    // Fallback if none picked
     chosenSkill ??= SeedSkills.getById('fireball');
 
-    // Deduct mana & set cooldown if active
+    // Handle Active Skill trigger & Banner
     if (chosenSkill.type == SkillType.active) {
       _heroMana = max(0, _heroMana - chosenSkill.manaCost);
       _cooldowns[chosenSkill.id] = chosenSkill.cooldown;
+      _activeBanner = '${chosenSkill.emoji} ${chosenSkill.name.toUpperCase()}!';
+      _bannerTimer = 0.8;
       _addLog('Bạn kích hoạt ${chosenSkill.name} (${chosenSkill.emoji})!');
     }
 
-    // Handle defensive / shield skills
+    // Defensive / Shield skill
     if (chosenSkill.grantsShield) {
       final shieldVal = (_heroMaxHp * 0.30).round();
       _heroShield = shieldVal;
       _addFloatingText('+$shieldVal Giáp 🛡️', Colors.cyanAccent, isHeroTarget: true);
       _addLog('Tạo khiên bảo vệ hấp thụ $shieldVal sát thương.');
+      return;
+    }
+
+    // Healing skill
+    if (chosenSkill.healsHero) {
+      final healVal = (_heroMaxHp * 0.35).round();
+      _heroHp = min(_heroMaxHp, _heroHp + healVal);
+      _addFloatingText('+$healVal HP 💚', Colors.greenAccent, isHeroTarget: true);
+      _addLog('Bạn hồi phục $healVal HP bằng ${chosenSkill.name}.');
       return;
     }
 
@@ -199,6 +244,12 @@ class BattleService {
       rawDamage *= (1.0 + player.burnTargetBonusPercent);
     }
 
+    // Zone 3: Magic Resistance (Kháng phép 40%)
+    if (enemy.magicResistPercent > 0 &&
+        chosenSkill.element != SkillElement.physical) {
+      rawDamage *= (1.0 - enemy.magicResistPercent);
+    }
+
     // Crit calculation
     double critChance = player.critRate + chosenSkill.critRateBonus;
     bool isCrit = _rng.nextDouble() < critChance;
@@ -217,10 +268,23 @@ class BattleService {
       _addLog('${enemy.name} bị thiêu đốt!');
     }
 
-    // Display floating damage
+    // Floating text: Show skill name on basic attack or active
+    String dmgText = '$netDamage';
+    if (isCrit) {
+      dmgText = 'CRIT! $netDamage 💥';
+    } else if (chosenSkill.type == SkillType.basic) {
+      dmgText = '${chosenSkill.name}\n$netDamage';
+    }
+
     _addFloatingText(
-      '$netDamage${isCrit ? ' 💥' : ''}',
-      isCrit ? Colors.amberAccent : Colors.orangeAccent,
+      dmgText,
+      isCrit
+          ? Colors.amberAccent
+          : (chosenSkill.element == SkillElement.fire
+              ? Colors.orangeAccent
+              : (chosenSkill.element == SkillElement.ice
+                  ? Colors.cyanAccent
+                  : Colors.white)),
       isCrit: isCrit,
       isHeroTarget: false,
     );
@@ -228,6 +292,30 @@ class BattleService {
     _addLog(
       '${player.name} dùng ${chosenSkill.name} gây $netDamage ${isCrit ? '(CHÍ MẠNG!)' : ''} lên ${enemy.name}.',
     );
+
+    // Zone 4: Reflect Damage (Phản đòn 20%)
+    if (enemy.reflectDamagePercent > 0 && netDamage > 0) {
+      int reflectDmg = max(1, (netDamage * enemy.reflectDamagePercent).round());
+      if (_heroShield > 0) {
+        if (_heroShield >= reflectDmg) {
+          _heroShield -= reflectDmg;
+        } else {
+          reflectDmg -= _heroShield;
+          _heroShield = 0;
+          _heroHp = max(0, _heroHp - reflectDmg);
+        }
+      } else {
+        _heroHp = max(0, _heroHp - reflectDmg);
+      }
+
+      _addFloatingText('-$reflectDmg 🔄', Colors.purpleAccent, isHeroTarget: true);
+      _addLog('${player.name} chịu $reflectDmg sát thương phản đòn từ ${enemy.name}!');
+
+      if (_heroHp <= 0) {
+        _handleDefeat();
+        return;
+      }
+    }
   }
 
   void _executeEnemyAction() {
@@ -238,13 +326,14 @@ class BattleService {
       return;
     }
 
-    // Enemy attack damage
     double rawDmg = enemy.atk.toDouble();
     bool isSpecial = false;
+    String attackName = 'Đòn Đánh';
     if (enemy.specialSkill != null && _rng.nextDouble() < 0.35) {
       isSpecial = true;
       rawDmg *= enemy.specialSkill!.damageMultiplier;
-      _addLog('${enemy.name} tung chiêu [${enemy.specialSkill!.name}]!');
+      attackName = enemy.specialSkill!.name;
+      _addLog('${enemy.name} tung chiêu [$attackName]!');
     }
 
     bool isCrit = _rng.nextDouble() < enemy.critRate;
@@ -268,15 +357,18 @@ class BattleService {
 
     _heroHp = max(0, _heroHp - netDmg);
 
+    String enemyHitText = isSpecial ? '$attackName\n-$netDmg' : '-$netDmg';
+    if (isCrit) enemyHitText = 'CRIT! -$netDmg 💥';
+
     _addFloatingText(
-      '-$netDmg${isCrit ? ' 💥' : ''}',
+      enemyHitText,
       isCrit ? Colors.redAccent : Colors.red,
       isCrit: isCrit,
       isHeroTarget: true,
     );
 
     _addLog(
-      '${enemy.name} tấn công gây $netDmg sát thương ${isCrit ? '(CHÍ MẠNG!)' : ''}.',
+      '${enemy.name} dùng [$attackName] gây $netDmg sát thương ${isCrit ? '(CHÍ MẠNG!)' : ''}.',
     );
   }
 
@@ -319,7 +411,8 @@ class BattleService {
     onBattleEnded(finalState);
   }
 
-  void _addFloatingText(String text, Color color, {bool isCrit = false, bool isHeroTarget = false}) {
+  void _addFloatingText(String text, Color color,
+      {bool isCrit = false, bool isHeroTarget = false}) {
     _floatingTexts.add(FloatingText(
       id: '${DateTime.now().microsecondsSinceEpoch}_${_rng.nextInt(1000)}',
       text: text,
@@ -360,6 +453,7 @@ class BattleService {
       earnedExp: earnedExp,
       earnedGold: earnedGold,
       droppedEquipment: droppedEquipment,
+      activeSkillCastName: _activeBanner,
     );
   }
 

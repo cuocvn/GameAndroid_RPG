@@ -63,6 +63,7 @@ class Equipment {
   final String? iconAsset;
   final String emoji;
   final int sellPrice;
+  final int upgradeLevel; // 0 to maxUpgradeLevel
 
   const Equipment({
     required this.id,
@@ -80,7 +81,42 @@ class Equipment {
     this.iconAsset,
     this.emoji = '🛡️',
     this.sellPrice = 50,
+    this.upgradeLevel = 0,
   });
+
+  int get maxUpgradeLevel =>
+      (rarity == EquipmentRarity.epic || rarity == EquipmentRarity.legendary) ? 10 : 5;
+
+  double get upgradeMultiplier => 1.0 + (upgradeLevel * 0.10);
+
+  int get effectiveFlatAtk => (flatAtk * upgradeMultiplier).round();
+  int get effectiveFlatDef => (flatDef * upgradeMultiplier).round();
+  int get effectiveFlatHp => (flatHp * upgradeMultiplier).round();
+
+  // Upgrade costs
+  int get upgradeGoldCost => (sellPrice * 0.8 * (upgradeLevel + 1)).round() + 40;
+  int get upgradeGemsCost => 1 + (upgradeLevel ~/ 2);
+
+  Equipment copyWith({int? upgradeLevel}) {
+    return Equipment(
+      id: id,
+      name: name,
+      description: description,
+      slot: slot,
+      rarity: rarity,
+      flatAtk: flatAtk,
+      flatDef: flatDef,
+      flatHp: flatHp,
+      critRate: critRate,
+      fireDmgPercent: fireDmgPercent,
+      manaRegen: manaRegen,
+      bonusStats: bonusStats,
+      iconAsset: iconAsset,
+      emoji: emoji,
+      sellPrice: sellPrice,
+      upgradeLevel: upgradeLevel ?? this.upgradeLevel,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -98,6 +134,7 @@ class Equipment {
         'iconAsset': iconAsset,
         'emoji': emoji,
         'sellPrice': sellPrice,
+        'upgradeLevel': upgradeLevel,
       };
 
   factory Equipment.fromJson(Map<String, dynamic> json) => Equipment(
@@ -118,5 +155,6 @@ class Equipment {
         iconAsset: json['iconAsset'] as String?,
         emoji: json['emoji'] as String? ?? '🛡️',
         sellPrice: json['sellPrice'] as int? ?? 50,
+        upgradeLevel: json['upgradeLevel'] as int? ?? 0,
       );
 }

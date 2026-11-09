@@ -5,15 +5,84 @@ import '../providers/game_providers.dart';
 import 'battle_screen.dart';
 import 'build_screen.dart';
 import 'map_screen.dart';
+import 'shop_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkFirstTimeTutorial();
+    });
+  }
+
+  void _checkFirstTimeTutorial() {
+    final player = ref.read(playerProvider);
+    if (!player.hasSeenTutorialHome) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF161520),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Colors.amberAccent, width: 1.5),
+          ),
+          title: const Row(
+            children: [
+              Text('🧙‍♀️ ', style: TextStyle(fontSize: 22)),
+              Text('Chào Mừng Dũng Sĩ!', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          content: const Text(
+            'Chào mừng bạn đến với thế giới Tactical RPG!\n\nNhấn nút "CHIẾN ĐẤU" bên dưới để bước vào trận đánh đầu tiên của bạn!',
+            style: TextStyle(fontSize: 13, color: Colors.white70),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                ref.read(playerProvider.notifier).markTutorialHomeSeen();
+                Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700),
+              child: const Text('Đã hiểu', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final reqExp = player.expToNextLevel;
     final expRatio = reqExp > 0 ? (player.currentExp / reqExp).clamp(0.0, 1.0) : 0.0;
+
+    final isShopUnlocked = player.level >= 5;
+    final isMapUnlocked = player.level >= 6;
+
+    // Milestone calculation
+    final clearedCount = player.clearedStages.length;
+    String milestoneText;
+    if (clearedCount < 5) {
+      milestoneText = '⭐ Còn ${5 - clearedCount} ải nữa mở khóa Kỹ Năng Chủ Động mới';
+    } else if (clearedCount < 10) {
+      milestoneText = '⭐ Còn ${10 - clearedCount} ải nữa mở khóa Kỹ Năng Bị Động mới';
+    } else if (clearedCount < 15) {
+      milestoneText = '⭐ Còn ${15 - clearedCount} ải nữa mở thêm Ô Kỹ Năng Thứ 5';
+    } else if (clearedCount < 20) {
+      milestoneText = '⭐ Còn ${20 - clearedCount} ải nữa mở khóa Tuyệt Kỹ Tối Thượng';
+    } else {
+      milestoneText = '👑 Đã hoàn thành toàn bộ mốc thử thách danh dự!';
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
@@ -48,23 +117,23 @@ class HomeScreen extends ConsumerWidget {
           SafeArea(
             child: Column(
               children: [
-                // Top Header: Currency & Level
+                // Top Header: Currencies, Shop & Level
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(
                     children: [
                       // Level Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [Colors.amber.shade800, Colors.amber.shade600],
                           ),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.amber.withOpacity(0.4),
-                              blurRadius: 8,
+                              blurRadius: 6,
                             ),
                           ],
                         ),
@@ -72,14 +141,14 @@ class HomeScreen extends ConsumerWidget {
                           'Lv. ${player.level}',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontSize: 14,
                             color: Colors.white,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
 
-                      // Player Name & Title
+                      // Player Name
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +156,7 @@ class HomeScreen extends ConsumerWidget {
                             Text(
                               player.name,
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                               ),
@@ -95,7 +164,7 @@ class HomeScreen extends ConsumerWidget {
                             Text(
                               player.title,
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 11,
                                 color: Colors.amberAccent.shade100,
                               ),
                             ),
@@ -103,27 +172,86 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
 
-                      // Gold Badge
+                      // Gems (Đá Quý)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black54,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.amber, width: 1.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.cyanAccent.withOpacity(0.7), width: 1),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🪙 ', style: TextStyle(fontSize: 14)),
+                            const Text('💎 ', style: TextStyle(fontSize: 12)),
+                            Text(
+                              '${player.gems}',
+                              style: const TextStyle(
+                                color: Colors.cyanAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      // Gold Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('🪙 ', style: TextStyle(fontSize: 12)),
                             Text(
                               '${player.gold}',
                               style: const TextStyle(
                                 color: Colors.amberAccent,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 15,
+                                fontSize: 13,
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      // Shop Icon (Opens ShopScreen if level >= 5)
+                      InkWell(
+                        onTap: isShopUnlocked
+                            ? () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const ShopScreen()),
+                                );
+                              }
+                            : () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🏪 Cửa Hàng mở khóa ở Cấp độ 5!'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isShopUnlocked ? Colors.amber.shade900 : Colors.grey.shade900,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isShopUnlocked ? Colors.amberAccent : Colors.grey.shade700,
+                            ),
+                          ),
+                          child: Icon(
+                            isShopUnlocked ? Icons.storefront : Icons.lock,
+                            size: 18,
+                            color: isShopUnlocked ? Colors.amberAccent : Colors.white38,
+                          ),
                         ),
                       ),
                     ],
@@ -141,29 +269,56 @@ class HomeScreen extends ConsumerWidget {
                         children: [
                           const Text(
                             'Kinh nghiệm (EXP)',
-                            style: TextStyle(fontSize: 11, color: Colors.white70),
+                            style: TextStyle(fontSize: 10.5, color: Colors.white70),
                           ),
                           Text(
                             '${player.currentExp} / $reqExp (${(expRatio * 100).toStringAsFixed(1)}%)',
-                            style: const TextStyle(fontSize: 11, color: Colors.amberAccent),
+                            style: const TextStyle(fontSize: 10.5, color: Colors.amberAccent),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: expRatio,
                           backgroundColor: Colors.grey.shade900,
                           valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
-                          minHeight: 6,
+                          minHeight: 5,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                // Milestone Progress Banner
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade900.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            milestoneText,
+                            style: const TextStyle(fontSize: 10.5, color: Colors.purpleAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        Text(
+                          '${clearedCount}/20',
+                          style: const TextStyle(fontSize: 10, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 4),
 
                 // Hero Portrait Display Card
                 Expanded(
@@ -196,27 +351,27 @@ class HomeScreen extends ConsumerWidget {
 
                         // Change Avatar Button
                         Positioned(
-                          top: 12,
-                          right: 12,
+                          top: 10,
+                          right: 10,
                           child: InkWell(
                             onTap: () => _showAvatarPicker(context, ref),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.black87,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(color: Colors.amberAccent, width: 1),
                               ),
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.style, size: 14, color: Colors.amberAccent),
+                                  Icon(Icons.style, size: 12, color: Colors.amberAccent),
                                   SizedBox(width: 4),
                                   Text(
                                     'Đổi Tướng',
                                     style: TextStyle(
                                       color: Colors.amberAccent,
-                                      fontSize: 11,
+                                      fontSize: 10.5,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -229,25 +384,25 @@ class HomeScreen extends ConsumerWidget {
                         // Notification Badge if has unspent Stat / Skill points
                         if (player.statPoints > 0 || player.skillPoints > 0)
                           Positioned(
-                            top: 12,
-                            left: 12,
+                            top: 10,
+                            left: 10,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.red.shade900,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(color: Colors.redAccent, width: 1),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.upgrade, size: 14, color: Colors.white),
+                                  const Icon(Icons.upgrade, size: 12, color: Colors.white),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '+${player.statPoints + player.skillPoints} Điểm nâng cấp!',
+                                    '+${player.statPoints + player.skillPoints} Điểm!',
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 11,
+                                      fontSize: 10.5,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -256,13 +411,13 @@ class HomeScreen extends ConsumerWidget {
                             ),
                           ),
 
-                        // Stats Summary Overlay on Bottom of Card
+                        // Streamlined Home Stats: Chỉ hiện Level, HP, ATK, DEF, MANA (Gọn gàng)
                         Positioned(
                           bottom: 0,
                           left: 0,
                           right: 0,
                           child: Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                             decoration: BoxDecoration(
                               borderRadius: const BorderRadius.only(
                                 bottomLeft: Radius.circular(19),
@@ -280,12 +435,10 @@ class HomeScreen extends ConsumerWidget {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: [
-                                _quickStat('HP', '${player.maxHp}', Colors.greenAccent),
-                                _quickStat('MANA', '${player.maxMana}', Colors.cyanAccent),
-                                _quickStat('S.THƯƠNG', '${player.magicAtk.round()}', Colors.orangeAccent),
-                                _quickStat('GIÁP', '${player.physicalDef.round()}', Colors.lightBlueAccent),
-                                _quickStat('BẠO KÍCH', '${(player.critRate * 100).round()}%', Colors.amberAccent),
-                                _quickStat('HỎA CÔNG', '+${(player.fireDamageBonusPercent * 100).round()}%', Colors.redAccent),
+                                _quickStat('❤️ MÁU (HP)', '${player.maxHp}', Colors.greenAccent),
+                                _quickStat('⚔️ CÔNG (ATK)', '${player.magicAtk.round()}', Colors.orangeAccent),
+                                _quickStat('🛡️ GIÁP (DEF)', '${player.physicalDef.round()}', Colors.lightBlueAccent),
+                                _quickStat('💧 MANA', '${player.maxMana}', Colors.cyanAccent),
                               ],
                             ),
                           ),
@@ -295,14 +448,14 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
                 // Action Navigation Buttons
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      // Build Button
+                      // Build Button (Directly opens Build Screen)
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
@@ -317,26 +470,26 @@ class HomeScreen extends ConsumerWidget {
                                   : Colors.amberAccent,
                               width: 1.5,
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.handyman, color: Colors.amberAccent, size: 20),
-                              const SizedBox(width: 8),
+                              const Icon(Icons.handyman, color: Colors.amberAccent, size: 18),
+                              const SizedBox(width: 6),
                               const Text(
                                 'TÙY BIẾN BUILD',
                                 style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 12.5,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
                               ),
                               if (player.statPoints > 0 || player.skillPoints > 0) ...[
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 4),
                                 Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: const BoxDecoration(
@@ -345,7 +498,7 @@ class HomeScreen extends ConsumerWidget {
                                   ),
                                   child: Text(
                                     '${player.statPoints + player.skillPoints}',
-                                    style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(fontSize: 9.5, color: Colors.white, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
@@ -353,32 +506,48 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
 
-                      // Map Button
+                      // Map Button (Unlocks at Level 6)
                       OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const MapScreen()),
-                          );
-                        },
+                        onPressed: isMapUnlocked
+                            ? () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const MapScreen()),
+                                );
+                              }
+                            : () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🗺️ Bản Đồ mở khóa ở Cấp độ 6!'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.purpleAccent, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                          side: BorderSide(
+                            color: isMapUnlocked ? Colors.purpleAccent : Colors.grey.shade700,
+                            width: 1.5,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.map, color: Colors.purpleAccent, size: 20),
-                            SizedBox(width: 6),
+                            Icon(
+                              isMapUnlocked ? Icons.map : Icons.lock,
+                              color: isMapUnlocked ? Colors.purpleAccent : Colors.white38,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              'BẢN ĐỒ',
+                              isMapUnlocked ? 'BẢN ĐỒ' : 'BẢN ĐỒ (Lv.6)',
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: isMapUnlocked ? Colors.white : Colors.white38,
                               ),
                             ),
                           ],
@@ -388,12 +557,14 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
 
+                const SizedBox(height: 8),
+
                 // Primary BATTLE BUTTON
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: SizedBox(
                     width: double.infinity,
-                    height: 56,
+                    height: 52,
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.of(context).push(
@@ -409,9 +580,9 @@ class HomeScreen extends ConsumerWidget {
                         backgroundColor: Colors.transparent,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        elevation: 8,
+                        elevation: 6,
                         shadowColor: Colors.red.withOpacity(0.5),
                       ),
                       child: Ink(
@@ -419,19 +590,19 @@ class HomeScreen extends ConsumerWidget {
                           gradient: const LinearGradient(
                             colors: [Color(0xFFE53935), Color(0xFFFF8A65), Color(0xFFFFB74D)],
                           ),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Center(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text('⚔️ ', style: TextStyle(fontSize: 22)),
+                              const Text('⚔️ ', style: TextStyle(fontSize: 20)),
                               Text(
                                 'VÀO CHIẾN ĐẤU (VÙNG ${player.currentZone} - ẢI ${player.currentStage})',
                                 style: const TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.0,
+                                  letterSpacing: 0.8,
                                   color: Colors.white,
                                 ),
                               ),
@@ -442,7 +613,7 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -460,7 +631,7 @@ class HomeScreen extends ConsumerWidget {
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.bold,
-            fontSize: 13,
+            fontSize: 14,
           ),
         ),
         Text(

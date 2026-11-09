@@ -8,6 +8,12 @@ import '../models/skill.dart';
 import '../models/stats.dart';
 import '../services/save_service.dart';
 
+class MilestoneRewardResult {
+  final String message;
+  final String? unlockedSkillName;
+  MilestoneRewardResult({required this.message, this.unlockedSkillName});
+}
+
 class PlayerNotifier extends Notifier<Player> {
   final Player? _initial;
   PlayerNotifier([this._initial]);
@@ -15,6 +21,28 @@ class PlayerNotifier extends Notifier<Player> {
   @override
   Player build() {
     return _initial ?? const Player();
+  }
+
+  // --- Tutorial Markers ---
+  void markTutorialHomeSeen() {
+    if (!state.hasSeenTutorialHome) {
+      state = state.copyWith(hasSeenTutorialHome: true);
+      _save();
+    }
+  }
+
+  void markTutorialFirstWinSeen() {
+    if (!state.hasSeenTutorialFirstWin) {
+      state = state.copyWith(hasSeenTutorialFirstWin: true);
+      _save();
+    }
+  }
+
+  void markTutorialFirstDropSeen() {
+    if (!state.hasSeenTutorialFirstDrop) {
+      state = state.copyWith(hasSeenTutorialFirstDrop: true);
+      _save();
+    }
   }
 
   /// Allocates 1 point into a chosen stat attribute
@@ -63,7 +91,7 @@ class PlayerNotifier extends Notifier<Player> {
     // Auto-equip if first time unlocking an active or basic skill and slots have room
     List<String> newEquipped = List.from(state.equippedSkillIds);
     if (skill.type != SkillType.passive && !newEquipped.contains(skillId)) {
-      if (newEquipped.length < 4) {
+      if (newEquipped.length < state.unlockedSkillSlots) {
         newEquipped.add(skillId);
       }
     }
@@ -79,19 +107,17 @@ class PlayerNotifier extends Notifier<Player> {
   /// Toggles equipping an active or basic skill in battle bar
   void toggleEquipSkill(String skillId) {
     final skill = SeedSkills.getById(skillId);
-    if (skill.type == SkillType.passive) return; // Passives are always active
+    if (skill.type == SkillType.passive) return;
 
     final list = List<String>.from(state.equippedSkillIds);
     if (list.contains(skillId)) {
       if (list.length > 1) {
-        // Must keep at least 1 skill equipped
         list.remove(skillId);
       }
     } else {
-      if (list.length < 4) {
+      if (list.length < state.unlockedSkillSlots) {
         list.add(skillId);
       } else {
-        // Replace last
         list[list.length - 1] = skillId;
       }
     }
@@ -175,8 +201,124 @@ class PlayerNotifier extends Notifier<Player> {
     _save();
   }
 
-  /// Receives battle victory rewards: EXP, Gold, and dropped items
-  void onBattleVictory({
+  /// Sells all Common & Uncommon items from inventory (QoL)
+  int sellAllLowRarity() {
+    final toSell = state.inventory
+        .where((e) =>
+            e.rarity == EquipmentRarity.common ||
+            e.rarity == EquipmentRarity.uncommon)
+        .toList();
+
+    if (toSell.isEmpty) return 0;
+
+    int totalEarned = 0;
+    for (var item in toSell) {
+      totalEarned += item.sellPrice;
+    }
+
+    final remaining = state.inventory
+        .where((e) =>
+            e.rarity != EquipmentRarity.common &&
+            e.rarity != EquipmentRarity.uncommon)
+        .toList();
+
+    state = state.copyWith(
+      gold: state.gold + totalEarned,
+      inventory: remaining,
+    );
+    _save();
+    return totalEarned;
+  }
+
+  /// Buys an item from the Shop
+  bool buyShopItem(Equipment item, int price) {
+    if (state.gold < price) return false;
+
+    final newInventory = List<Equipment>.from(state.inventory)..add(item);
+    state = state.copyWith(
+      gold: state.gold - price,
+      inventory: newInventory,
+    );
+    _save();
+    return true;
+  }
+
+  /// Buys gems with Gold
+  bool buyGems(int gemCount, int goldCost) {
+    if (state.gold < goldCost) return false;
+
+    state = state.copyWith(
+      gold: state.gold - goldCost,
+      gems: state.gems + gemCount,
+    );
+    _save();
+    return true;
+  }
+
+  /// Upgrades an item in inventory or equipped slots
+  bool upgradeEquipment(String itemId) {
+    // Find item
+    bool inEquippedWeapon = state.equippedWeapon?.id == itemId;
+    bool inEquippedArmor = state.equippedArmor?.id == itemId;
+    bool inEquippedAccessory = state.equippedAccessory?.id == itemId;
+
+    Equipment? targetItem;
+    if (inEquippedWeapon) targetItem = state.equippedWeapon;
+    if (inEquippedArmor) targetItem = state.equippedArmor;
+    if (inEquippedAccessory) targetItem = state.equippedAccessory;
+
+    if (targetItem == null) {
+      final idx = state.inventory.indexWhere((e) => e.id == itemId);
+      if (idx != -1) targetItem = state.inventory[idx];
+    }
+
+    if (targetItem == null) return false;
+    if (targetItem.upgradeLevel >= targetItem.maxUpgradeLevel) return false;
+
+    final goldCost = targetItem.upgradeGoldCost;
+    final gemsCost = targetItem.upgradeGemsCost;
+
+    if (state.gold < goldCost || state.gems < gemsCost) return false;
+
+    final upgraded = targetItem.copyWith(upgradeLevel: targetItem.upgradeLevel + 1);
+
+    if (inEquippedWeapon) {
+      state = state.copyWith(
+        equippedWeapon: upgraded,
+        gold: state.gold - goldCost,
+        gems: state.gems - gemsCost,
+      );
+    } else if (inEquippedArmor) {
+      state = state.copyWith(
+        equippedArmor: upgraded,
+        gold: state.gold - goldCost,
+        gems: state.gems - gemsCost,
+      );
+    } else if (inEquippedAccessory) {
+      state = state.copyWith(
+        equippedAccessory: upgraded,
+        gold: state.gold - goldCost,
+        gems: state.gems - gemsCost,
+      );
+    } else {
+      final newInv = List<Equipment>.from(state.inventory);
+      final idx = newInv.indexWhere((e) => e.id == itemId);
+      if (idx != -1) {
+        newInv[idx] = upgraded;
+        state = state.copyWith(
+          inventory: newInv,
+          gold: state.gold - goldCost,
+          gems: state.gems - gemsCost,
+        );
+      }
+    }
+
+    _save();
+    return true;
+  }
+
+  /// Receives battle victory rewards: EXP, Gold, dropped items & Milestone checks
+  MilestoneRewardResult? onBattleVictory({
     required int exp,
     required int gold,
     required List<Equipment> drops,
@@ -194,11 +336,20 @@ class PlayerNotifier extends Notifier<Player> {
       if (newExp >= reqExp) {
         newExp -= reqExp;
         newLevel++;
-        addedStatPoints += 3; // +3 stat points per level
+        addedStatPoints += 2; // +2 stat points per level (giới hạn sức mạnh người chơi)
         addedSkillPoints += 1; // +1 skill point per level
       } else {
         break;
       }
+    }
+
+    // Gem drop chance (100% on boss, 25% on normal)
+    int gainedGems = 0;
+    final isBoss = foughtStage >= SeedEnemies.getEnemiesForZone(foughtZone).length;
+    if (isBoss) {
+      gainedGems = 1 + (foughtZone ~/ 2);
+    } else if (Random().nextDouble() < 0.25) {
+      gainedGems = 1;
     }
 
     final newInventory = List<Equipment>.from(state.inventory)..addAll(drops);
@@ -207,9 +358,70 @@ class PlayerNotifier extends Notifier<Player> {
     int newMaxZone = state.maxUnlockedZone;
     final zoneStages = SeedEnemies.getEnemiesForZone(foughtZone);
     if (foughtStage >= zoneStages.length) {
-      // Defeated boss!
       if (foughtZone < 5 && foughtZone >= state.maxUnlockedZone) {
         newMaxZone = min(5, foughtZone + 1);
+      }
+    }
+
+    // Milestone tracking (first clear only)
+    final stageKey = 'z${foughtZone}_s$foughtStage';
+    final clearedList = List<String>.from(state.clearedStages);
+    MilestoneRewardResult? milestoneResult;
+
+    if (!clearedList.contains(stageKey)) {
+      clearedList.add(stageKey);
+      final uniqueClearedCount = clearedList.length;
+
+      // Milestone 5: Unlock 1 random unowned active skill
+      if (uniqueClearedCount == 5) {
+        final unownedActive = SeedSkills.allSkills
+            .where((s) => s.type == SkillType.active && (state.skillLevels[s.id] ?? 0) == 0)
+            .toList();
+        if (unownedActive.isNotEmpty) {
+          final unlocked = unownedActive[Random().nextInt(unownedActive.length)];
+          final updatedLevels = Map<String, int>.from(state.skillLevels);
+          updatedLevels[unlocked.id] = 1;
+          state = state.copyWith(skillLevels: updatedLevels);
+          milestoneResult = MilestoneRewardResult(
+            message: '⭐ MỐC 5 ẢI: Mở khóa kỹ năng chủ động mới!',
+            unlockedSkillName: unlocked.name,
+          );
+        }
+      }
+      // Milestone 10: Unlock 1 random unowned passive skill
+      else if (uniqueClearedCount == 10) {
+        final unownedPassive = SeedSkills.allSkills
+            .where((s) => s.type == SkillType.passive && (state.skillLevels[s.id] ?? 0) == 0)
+            .toList();
+        if (unownedPassive.isNotEmpty) {
+          final unlocked = unownedPassive[Random().nextInt(unownedPassive.length)];
+          final updatedLevels = Map<String, int>.from(state.skillLevels);
+          updatedLevels[unlocked.id] = 1;
+          state = state.copyWith(skillLevels: updatedLevels);
+          milestoneResult = MilestoneRewardResult(
+            message: '⭐ MỐC 10 ẢI: Mở khóa kỹ năng bị động mới!',
+            unlockedSkillName: unlocked.name,
+          );
+        }
+      }
+      // Milestone 15: Unlock +1 Skill Slot (up to 5!)
+      else if (uniqueClearedCount == 15) {
+        state = state.copyWith(unlockedSkillSlots: 5);
+        milestoneResult = MilestoneRewardResult(
+          message: '⭐ MỐC 15 ẢI: Mở rộng thanh kỹ năng xuất trận lên 5 ô!',
+          unlockedSkillName: '+1 Ô Kỹ Năng Xuất Trận',
+        );
+      }
+      // Milestone 20: Unlock Ultimate Skill
+      else if (uniqueClearedCount == 20) {
+        final ultSkill = SeedSkills.getById('inferno_storm');
+        final updatedLevels = Map<String, int>.from(state.skillLevels);
+        updatedLevels[ultSkill.id] = 1;
+        state = state.copyWith(skillLevels: updatedLevels);
+        milestoneResult = MilestoneRewardResult(
+          message: '⭐ MỐC 20 ẢI: Mở khóa Tuyệt Kỹ Tối Thượng!',
+          unlockedSkillName: ultSkill.name,
+        );
       }
     }
 
@@ -217,13 +429,16 @@ class PlayerNotifier extends Notifier<Player> {
       level: newLevel,
       currentExp: newExp,
       gold: state.gold + gold,
+      gems: state.gems + gainedGems,
       statPoints: state.statPoints + addedStatPoints,
       skillPoints: state.skillPoints + addedSkillPoints,
       inventory: newInventory,
       maxUnlockedZone: newMaxZone,
+      clearedStages: clearedList,
     );
 
     _save();
+    return milestoneResult;
   }
 
   /// Selects zone and stage to challenge

@@ -9,6 +9,8 @@ enum SkillElement {
   fire,
   ice,
   lightning,
+  poison,
+  holy,
 }
 
 class Skill {
@@ -36,6 +38,7 @@ class Skill {
   // Active status triggers
   final bool causesBurn;
   final bool grantsShield;
+  final bool healsHero;
 
   const Skill({
     required this.id,
@@ -58,6 +61,7 @@ class Skill {
     this.manaRegenBonus = 0.0,
     this.causesBurn = false,
     this.grantsShield = false,
+    this.healsHero = false,
   });
 
   /// Scaling multiplier based on level: +15% per extra level
@@ -91,6 +95,7 @@ class Skill {
       manaRegenBonus: manaRegenBonus,
       causesBurn: causesBurn,
       grantsShield: grantsShield,
+      healsHero: healsHero,
     );
   }
 

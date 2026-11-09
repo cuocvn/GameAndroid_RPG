@@ -1,0 +1,146 @@
+import '../models/skill.dart';
+
+class SeedSkills {
+  static final List<Skill> allSkills = [
+    // --- ĐÁNH THƯỜNG (Basic) ---
+    const Skill(
+      id: 'fireball',
+      name: 'Hỏa Cầu',
+      description: 'Phóng quả cầu lửa gây 100% sát thương phép thuật.',
+      type: SkillType.basic,
+      element: SkillElement.fire,
+      baseMultiplier: 1.0,
+      manaCost: 0,
+      cooldown: 0.0,
+      emoji: '🔥',
+    ),
+    const Skill(
+      id: 'flame_slash',
+      name: 'Hỏa Trảm Kiếm',
+      description: 'Chém thanh kiếm rực lửa gây 105% sát thương vật lý.',
+      type: SkillType.basic,
+      element: SkillElement.physical,
+      baseMultiplier: 1.05,
+      manaCost: 0,
+      cooldown: 0.0,
+      emoji: '⚔️',
+    ),
+    const Skill(
+      id: 'spark_bolt',
+      name: 'Lôi Hỏa Kích',
+      description: 'Bắn tia sét lửa gây 95% sát thương và tăng 10% tỉ lệ chí mạng.',
+      type: SkillType.basic,
+      element: SkillElement.lightning,
+      baseMultiplier: 0.95,
+      manaCost: 0,
+      cooldown: 0.0,
+      critRateBonus: 0.10,
+      emoji: '⚡',
+    ),
+
+    // --- CHỦ ĐỘNG (Active) ---
+    const Skill(
+      id: 'meteor',
+      name: 'Thiên Thạch',
+      description: 'Gọi thiên thạch giáng xuống gây 300% sát thương phép và thiêu đốt mục tiêu.',
+      type: SkillType.active,
+      element: SkillElement.fire,
+      baseMultiplier: 3.0,
+      manaCost: 40,
+      cooldown: 4.0,
+      causesBurn: true,
+      emoji: '☄️',
+    ),
+    const Skill(
+      id: 'flame_burst',
+      name: 'Hỏa Long Ba',
+      description: 'Ngưng tụ hỏa long phóng thích gây 220% sát thương, tăng 25% tỉ lệ bạo kích.',
+      type: SkillType.active,
+      element: SkillElement.fire,
+      baseMultiplier: 2.2,
+      manaCost: 25,
+      cooldown: 2.5,
+      critRateBonus: 0.25,
+      emoji: '🐉',
+    ),
+    const Skill(
+      id: 'fire_shield',
+      name: 'Khiên Hỏa Giáp',
+      description: 'Kích hoạt màng chắn lửa hấp thụ sát thương bằng 30% HP tối đa.',
+      type: SkillType.active,
+      element: SkillElement.fire,
+      baseMultiplier: 0.0,
+      manaCost: 35,
+      cooldown: 8.0,
+      grantsShield: true,
+      emoji: '🛡️',
+    ),
+    const Skill(
+      id: 'inferno_storm',
+      name: 'Hỏa Bão Tận Thế',
+      description: 'Tuyệt kỹ thiêu rụi trời đất gây 450% sát thương cực hạn, thiêu đốt mãnh liệt.',
+      type: SkillType.active,
+      element: SkillElement.fire,
+      baseMultiplier: 4.5,
+      manaCost: 60,
+      cooldown: 7.0,
+      causesBurn: true,
+      emoji: '🌋',
+    ),
+
+    // --- BỊ ĐỘNG (Passive) ---
+    const Skill(
+      id: 'fire_heart',
+      name: 'Hỏa Tâm',
+      description: 'Trái tim rực cháy: Tăng vĩnh viễn +15% sát thương nguyên tố Lửa.',
+      type: SkillType.passive,
+      element: SkillElement.fire,
+      fireDmgBonus: 0.15,
+      emoji: '💖',
+    ),
+    const Skill(
+      id: 'flame_ignite',
+      name: 'Dực Hỏa Thiêu Đốt',
+      description: 'Gia tăng sát thương lên mục tiêu đang bị thiêu đốt thêm +20%.',
+      type: SkillType.passive,
+      element: SkillElement.fire,
+      burnTargetBonus: 0.20,
+      emoji: '♨️',
+    ),
+    const Skill(
+      id: 'frenzy',
+      name: 'Cuồng Bạo',
+      description: 'Tâm trí chiến thần: Tăng +5% tỉ lệ chí mạng và +15% sát thương chí mạng.',
+      type: SkillType.passive,
+      element: SkillElement.physical,
+      critRateBonus: 0.05,
+      critDmgBonus: 0.15,
+      emoji: '🎯',
+    ),
+    const Skill(
+      id: 'vital_body',
+      name: 'Linh Thể Hộ Mệnh',
+      description: 'Cường hóa thể phách: Tăng +10% HP tối đa và +3 DEF.',
+      type: SkillType.passive,
+      element: SkillElement.physical,
+      hpBonusPercent: 0.10,
+      emoji: '🔰',
+    ),
+    const Skill(
+      id: 'arcane_flow',
+      name: 'Dòng Chảy Ma Lực',
+      description: 'Thông suốt kinh mạch: Hồi thêm +2 Mana mỗi giây.',
+      type: SkillType.passive,
+      element: SkillElement.fire,
+      manaRegenBonus: 2.0,
+      emoji: '🌀',
+    ),
+  ];
+
+  static Skill getById(String id) {
+    return allSkills.firstWhere(
+      (s) => s.id == id,
+      orElse: () => allSkills.first,
+    );
+  }
+}

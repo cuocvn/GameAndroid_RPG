@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -530,7 +529,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           Expanded(
                             child: _buildStatCard(
                               label: 'GIÁP (DEF)',
-                              value: '${player.physicalDef.toStringAsFixed(1)}',
+                              value: player.physicalDef.toStringAsFixed(1),
                               icon: Icons.shield,
                               color: AppTheme.blueAccent,
                             ),

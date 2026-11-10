@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_enemies.dart';
-import '../models/player.dart';
 import '../providers/game_providers.dart';
 import '../theme/app_theme.dart';
 import 'battle_screen.dart';

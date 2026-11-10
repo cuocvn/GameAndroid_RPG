@@ -7,6 +7,19 @@ enum EquipmentSlot {
   accessory,
 }
 
+extension EquipmentSlotExtension on EquipmentSlot {
+  String get label {
+    switch (this) {
+      case EquipmentSlot.weapon:
+        return 'Vũ Khí';
+      case EquipmentSlot.armor:
+        return 'Giáp';
+      case EquipmentSlot.accessory:
+        return 'Phụ Kiện';
+    }
+  }
+}
+
 enum EquipmentRarity {
   common,
   uncommon,

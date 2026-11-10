@@ -364,7 +364,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
               _derivedRow('🌀 Hồi phục Mana', '+${player.manaRegenPerSecond.toStringAsFixed(1)} / giây', Colors.lightBlueAccent),
               _derivedRow('⚔️ Sát thương Vật Lý', '${player.physicalAtk.round()}', AppTheme.redAccent),
               _derivedRow('🔮 Sát thương Phép Thuật', '${player.magicAtk.round()}', AppTheme.purpleAccent),
-              _derivedRow('🛡️ Giáp phòng thủ (DEF)', '${player.physicalDef.toStringAsFixed(1)}', AppTheme.blueAccent),
+              _derivedRow('🛡️ Giáp phòng thủ (DEF)', player.physicalDef.toStringAsFixed(1), AppTheme.blueAccent),
               _derivedRow('⏱️ Giãn cách đòn đánh', '${player.attackInterval.toStringAsFixed(2)}s / lần', AppTheme.cyanAccent),
               _derivedRow('💥 Tỉ lệ chí mạng (Crit)', '${(player.critRate * 100).toStringAsFixed(1)}%', AppTheme.goldAccent),
               _derivedRow('⚡ Sát thương chí mạng', '${(player.critDamageMultiplier * 100).round()}% (Max 250%)', AppTheme.goldAccent),

@@ -155,7 +155,9 @@ class AppTheme {
         background: bgDark,
         error: redAccent,
       ),
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+      textTheme: ThemeData.dark().textTheme.apply(
+        fontFamily: GoogleFonts.inter().fontFamily,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: bgDark,
         elevation: 0,

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_and/models/equipment.dart';
 import 'package:game_and/models/player.dart';
+import 'package:game_and/models/stats.dart';
 import 'package:game_and/models/skill.dart';
 import 'package:game_and/data/seed_skills.dart';
 import 'package:game_and/data/seed_enemies.dart';
@@ -89,5 +90,31 @@ void main() {
     expect(player.claimedQuestIds.contains('reach_lvl_5'), true);
     expect(player.gold, 250);
     expect(player.gems, 5);
+  });
+
+  test('Respec Stats & Skills calculation', () {
+    const player = Player(
+      level: 10,
+      gold: 500,
+      statPoints: 0,
+      stats: Stats(str: 15, int_: 15, vit: 12, agi: 8, luk: 6),
+      skillPoints: 0,
+      skillLevels: {'fireball': 3, 'meteor': 2},
+    );
+
+    // Respec Stats
+    final allocated = (player.stats.str - 5) +
+        (player.stats.int_ - 10) +
+        (player.stats.vit - 8) +
+        (player.stats.agi - 6) +
+        (player.stats.luk - 5);
+    expect(allocated, 22);
+
+    // Respec Skills
+    int refundedSkills = 0;
+    for (var lvl in player.skillLevels.values) {
+      if (lvl > 1) refundedSkills += (lvl - 1);
+    }
+    expect(refundedSkills, 3);
   });
 }

@@ -31,6 +31,98 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
     _tabController = TabController(length: 3, vsync: this);
   }
 
+  void _confirmRespecStats() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+        ),
+        title: Text(
+          '🔄 TẨY ĐIỂM CHỈ SỐ',
+          style: GoogleFonts.cinzel(
+            color: AppTheme.goldAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
+        content: const Text(
+          'Toàn bộ điểm chỉ số đã cộng vào Sức Mạnh, Trí Tuệ, Thể Lực, Nhanh Nhẹn, May Mắn sẽ được hoàn trả lại đầy đủ.\n\nChi phí: 50 🪙 Vàng.\nBạn có muốn tẩy điểm không?',
+          style: TextStyle(fontSize: 12.5, color: Colors.white70, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final success = ref.read(playerProvider.notifier).respecStats(goldCost: 50);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(success
+                      ? 'Đã tẩy điểm thành công! Hãy phân bổ lại điểm chỉ số dũng sĩ.'
+                      : 'Không đủ 50 Vàng hoặc chưa có điểm nào cần tẩy!'),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
+            child: const Text('Xác nhận (50🪙)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmRespecSkills() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.purpleAccent, width: 1.5),
+        ),
+        title: Text(
+          '🔄 TẨY ĐIỂM KỸ NĂNG',
+          style: GoogleFonts.cinzel(
+            color: AppTheme.purpleAccent,
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
+        content: const Text(
+          'Toàn bộ kỹ năng đã nâng cấp sẽ trở về cấp 1 và toàn bộ điểm kỹ năng đã đầu tư sẽ được hoàn trả đầy đủ.\n\nChi phí: 50 🪙 Vàng.\nBạn có muốn tẩy điểm kỹ năng không?',
+          style: TextStyle(fontSize: 12.5, color: Colors.white70, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final success = ref.read(playerProvider.notifier).respecSkills(goldCost: 50);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(success
+                      ? 'Đã tẩy kỹ năng thành công! Hãy phân bổ lại điểm kỹ năng.'
+                      : 'Không đủ 50 Vàng hoặc chưa có kỹ năng nào được nâng cấp!'),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.purpleAccent),
+            child: const Text('Xác nhận (50🪙)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -261,26 +353,50 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.goldButtonGradient,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.goldAccent.withOpacity(0.4),
-                      blurRadius: 6,
+              Row(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _confirmRespecStats,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.goldAccent.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.refresh, size: 13, color: AppTheme.goldAccent),
+                          const SizedBox(width: 3),
+                          Text('Tẩy Điểm', style: GoogleFonts.inter(fontSize: 10.5, color: AppTheme.goldAccent, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                child: Text(
-                  '${player.statPoints}',
-                  style: GoogleFonts.cinzel(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.goldButtonGradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.goldAccent.withOpacity(0.4),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '${player.statPoints}',
+                      style: GoogleFonts.cinzel(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -884,22 +1000,46 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8B5CF6), AppTheme.purpleAccent],
+              Row(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _confirmRespecSkills,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.purpleAccent.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.refresh, size: 13, color: AppTheme.purpleAccent),
+                          const SizedBox(width: 3),
+                          Text('Tẩy Skill', style: GoogleFonts.inter(fontSize: 10.5, color: AppTheme.purpleAccent, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  '${player.skillPoints}',
-                  style: GoogleFonts.cinzel(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B5CF6), AppTheme.purpleAccent],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '${player.skillPoints}',
+                      style: GoogleFonts.cinzel(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

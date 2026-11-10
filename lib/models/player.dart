@@ -48,6 +48,9 @@ class Player {
   // Claimed Quests & Achievement IDs
   final List<String> claimedQuestIds;
 
+  // Offline Idle AFK progress: timestamp of last claim (ms)
+  final int lastAfkClaimTime;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -84,6 +87,7 @@ class Player {
     this.nextStageDifficultyBonus = 0.0,
     this.highestEndlessFloor = 1,
     this.claimedQuestIds = const [],
+    this.lastAfkClaimTime = 0,
   });
 
   /// Required EXP to level up
@@ -222,6 +226,7 @@ class Player {
     double? nextStageDifficultyBonus,
     int? highestEndlessFloor,
     List<String>? claimedQuestIds,
+    int? lastAfkClaimTime,
   }) {
     return Player(
       name: name ?? this.name,
@@ -252,6 +257,7 @@ class Player {
       nextStageDifficultyBonus: nextStageDifficultyBonus ?? this.nextStageDifficultyBonus,
       highestEndlessFloor: highestEndlessFloor ?? this.highestEndlessFloor,
       claimedQuestIds: claimedQuestIds ?? this.claimedQuestIds,
+      lastAfkClaimTime: lastAfkClaimTime ?? this.lastAfkClaimTime,
     );
   }
 
@@ -283,6 +289,7 @@ class Player {
         'hasSeenTutorialFirstDrop': hasSeenTutorialFirstDrop,
         'highestEndlessFloor': highestEndlessFloor,
         'claimedQuestIds': claimedQuestIds,
+        'lastAfkClaimTime': lastAfkClaimTime,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -336,5 +343,6 @@ class Player {
                 ?.map((e) => e as String)
                 .toList() ??
             [],
+        lastAfkClaimTime: json['lastAfkClaimTime'] as int? ?? 0,
       );
 }

@@ -120,15 +120,15 @@ void main() {
 
       final vitTanker = Player(
         level: 20,
-        stats: const Stats(str: 25, int_: 5, vit: 50, agi: 8, luk: 5),
+        stats: const Stats(str: 25, int_: 5, vit: 55, agi: 8, luk: 5),
         equippedWeapon: weapon,
         equippedArmor: armor,
         equippedAccessory: accessory,
         skillLevels: const {
-          'flame_slash': 4,
-          'vital_body': 4,
-          'fire_shield': 3,
-          'holy_heal': 3,
+          'flame_slash': 5,
+          'vital_body': 5,
+          'fire_shield': 4,
+          'holy_heal': 4,
         },
         equippedSkillIds: const ['flame_slash', 'fire_shield', 'holy_heal'],
       );

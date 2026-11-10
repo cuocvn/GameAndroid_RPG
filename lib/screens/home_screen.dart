@@ -639,11 +639,171 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  String _formatAfkTime(int totalMinutes) {
+    if (totalMinutes < 1) return 'Vừa mới bắt đầu';
+    final hours = totalMinutes ~/ 60;
+    final mins = totalMinutes % 60;
+    if (hours > 0) {
+      return '$hours giờ $mins phút';
+    }
+    return '$mins phút';
+  }
+
+  void _showAfkRewardsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Consumer(
+        builder: (context, ref, _) {
+          final notifier = ref.read(playerProvider.notifier);
+          final afk = notifier.previewAfkRewards();
+          final minutes = afk['minutes'] as int;
+
+          return AlertDialog(
+            backgroundColor: AppTheme.bgSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+            ),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text('🌾 ', style: TextStyle(fontSize: 22)),
+                    Text(
+                      'KHO BÁU TREO MÁY AFK',
+                      style: GoogleFonts.cinzel(
+                        color: AppTheme.goldAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white60, size: 20),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Khi bạn rời game, dũng sĩ vẫn liên tục tu luyện và chiến đấu tại các ải cao nhất!',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Thời gian tích lũy:', style: TextStyle(fontSize: 11.5, color: Colors.white60)),
+                          Text(
+                            _formatAfkTime(minutes),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (minutes / 480).clamp(0.0, 1.0),
+                          backgroundColor: Colors.white12,
+                          color: AppTheme.goldAccent,
+                          minHeight: 5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Tối đa 8 giờ tích lũy',
+                          style: TextStyle(fontSize: 9.5, color: Colors.white38),
+                        ),
+                      ),
+                      const Divider(color: Colors.white12, height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Vàng tích lũy:', style: TextStyle(fontSize: 11.5, color: Colors.white60)),
+                          Text('+${afk['gold']} 🪙', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.goldAccent)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Kinh nghiệm:', style: TextStyle(fontSize: 11.5, color: Colors.white60)),
+                          Text('+${afk['exp']} EXP', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.purpleAccent)),
+                        ],
+                      ),
+                      if ((afk['gems'] as int) > 0) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Đá Cường Hóa:', style: TextStyle(fontSize: 11.5, color: Colors.white60)),
+                            Text('+${afk['gems']} 💎', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.blueAccent)),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Để Sau', style: TextStyle(color: Colors.white60)),
+              ),
+              ElevatedButton(
+                onPressed: minutes >= 1
+                    ? () {
+                        HapticFeedback.mediumImpact();
+                        final claimed = notifier.claimAfkRewards();
+                        Navigator.pop(ctx);
+                        if (claimed != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Thu hoạch thành công: +${claimed['gold']} Vàng, +${claimed['exp']} EXP!'),
+                            ),
+                          );
+                        }
+                      }
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.goldAccent,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Thu Hoạch', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final quests = _getQuestDefinitions(player);
     final hasClaimableQuests = quests.any((q) => q.isCompleted && !q.isClaimed);
+
+    final afkPreview = ref.read(playerProvider.notifier).previewAfkRewards();
+    final afkMinutes = afkPreview['minutes'] as int;
 
     final reqExp = player.expToNextLevel;
     final expRatio = reqExp > 0 ? (player.currentExp / reqExp).clamp(0.0, 1.0) : 0.0;
@@ -1036,7 +1196,82 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
+
+                // AFK Idle Harvest Banner
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _showAfkRewardsDialog();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgSurface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: afkMinutes >= 1
+                              ? AppTheme.goldAccent.withValues(alpha: 0.6)
+                              : Colors.white12,
+                          width: afkMinutes >= 1 ? 1.2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('🌾', style: TextStyle(fontSize: 18)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Tu Luyện Treo Máy (AFK Rewards)',
+                                  style: GoogleFonts.cinzel(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Tích lũy: ${_formatAfkTime(afkMinutes)}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 9.5,
+                                    color: afkMinutes >= 1
+                                        ? AppTheme.goldAccent
+                                        : Colors.white60,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              gradient: afkMinutes >= 1
+                                  ? AppTheme.goldButtonGradient
+                                  : null,
+                              color: afkMinutes < 1 ? Colors.white10 : null,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Thu Hoạch',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: afkMinutes >= 1 ? Colors.black : Colors.white38,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
 
                 // 4. PULSING "CHIẾN ĐẤU" CTA BUTTON
                 ScaleTransition(

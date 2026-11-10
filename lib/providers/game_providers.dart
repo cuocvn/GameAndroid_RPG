@@ -100,6 +100,119 @@ class PlayerNotifier extends Notifier<Player> {
     _save();
   }
 
+  /// Resets all allocated stat points back to statPoints pool (Tẩy điểm chỉ số)
+  bool respecStats({int goldCost = 50}) {
+    if (state.gold < goldCost) return false;
+
+    // Initial base stats: (str: 5, int_: 10, vit: 8, agi: 6, luk: 5)
+    final allocatedStr = max(0, state.stats.str - 5);
+    final allocatedInt = max(0, state.stats.int_ - 10);
+    final allocatedVit = max(0, state.stats.vit - 8);
+    final allocatedAgi = max(0, state.stats.agi - 6);
+    final allocatedLuk = max(0, state.stats.luk - 5);
+
+    final totalRefund = allocatedStr + allocatedInt + allocatedVit + allocatedAgi + allocatedLuk;
+    if (totalRefund == 0 && state.statPoints > 0) return false;
+
+    state = state.copyWith(
+      gold: state.gold - goldCost,
+      statPoints: state.statPoints + totalRefund,
+      stats: const Stats(str: 5, int_: 10, vit: 8, agi: 6, luk: 5),
+    );
+    _save();
+    return true;
+  }
+
+  /// Resets all upgraded skill points back to skillPoints pool (Tẩy điểm kỹ năng)
+  bool respecSkills({int goldCost = 50}) {
+    if (state.gold < goldCost) return false;
+
+    int refundedPoints = 0;
+    final updatedMap = <String, int>{};
+
+    for (final entry in state.skillLevels.entries) {
+      if (entry.value > 1) {
+        refundedPoints += (entry.value - 1);
+        updatedMap[entry.key] = 1;
+      } else {
+        updatedMap[entry.key] = entry.value;
+      }
+    }
+
+    if (refundedPoints == 0) return false;
+
+    state = state.copyWith(
+      gold: state.gold - goldCost,
+      skillPoints: state.skillPoints + refundedPoints,
+      skillLevels: updatedMap,
+    );
+    _save();
+    return true;
+  }
+
+  /// Calculates accumulated AFK rewards without claiming
+  Map<String, dynamic> previewAfkRewards() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lastClaim = state.lastAfkClaimTime > 0 ? state.lastAfkClaimTime : now;
+    final diffMs = max(0, now - lastClaim);
+    final elapsedMinutes = (diffMs / 60000).floor().clamp(0, 480); // max 8 hours
+
+    final goldRate = 12 * state.maxUnlockedZone;
+    final expRate = 20 * state.maxUnlockedZone;
+
+    final earnedGold = elapsedMinutes * goldRate;
+    final earnedExp = elapsedMinutes * expRate;
+    final earnedGems = (elapsedMinutes / 120).floor().clamp(0, 4); // 1 gem per 2 hours
+
+    return {
+      'minutes': elapsedMinutes,
+      'gold': earnedGold,
+      'exp': earnedExp,
+      'gems': earnedGems,
+    };
+  }
+
+  /// Claims accumulated AFK rewards
+  Map<String, dynamic>? claimAfkRewards() {
+    final preview = previewAfkRewards();
+    final minutes = preview['minutes'] as int;
+    if (minutes < 1) return null;
+
+    final gold = preview['gold'] as int;
+    final exp = preview['exp'] as int;
+    final gems = preview['gems'] as int;
+
+    int newExp = state.currentExp + exp;
+    int newLevel = state.level;
+    int addedStatPoints = 0;
+    int addedSkillPoints = 0;
+
+    while (true) {
+      final reqExp = newLevel * 100 + (newLevel * newLevel * 20);
+      if (newExp >= reqExp) {
+        newExp -= reqExp;
+        newLevel++;
+        addedStatPoints += 2;
+        addedSkillPoints += 1;
+      } else {
+        break;
+      }
+    }
+
+    state = state.copyWith(
+      lastAfkClaimTime: DateTime.now().millisecondsSinceEpoch,
+      gold: state.gold + gold,
+      gems: state.gems + gems,
+      level: newLevel,
+      currentExp: newExp,
+      statPoints: state.statPoints + addedStatPoints,
+      skillPoints: state.skillPoints + addedSkillPoints,
+    );
+    _save();
+
+    return preview;
+  }
+
   /// Upgrades or unlocks a skill with 1 skill point
   void upgradeSkill(String skillId) {
     if (state.skillPoints <= 0) return;

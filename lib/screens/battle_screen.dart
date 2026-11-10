@@ -86,7 +86,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _battleService.start();
   }
 
-  void _handleBattleEnd(BattleState state) {
+  void _handleBattleEnd(BattleState state) async {
     if (_dialogShown) return;
     _dialogShown = true;
 
@@ -102,9 +102,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             triggeredSpeedrun: state.triggeredSpeedrunBonus,
           );
 
-      _showResultDialog(isWon: true, state: state, previousPlayer: player);
+      await _showResultDialog(isWon: true, state: state, previousPlayer: player);
     } else if (state.isDefeated) {
-      _showResultDialog(isWon: false, state: state, previousPlayer: player);
+      await _showResultDialog(isWon: false, state: state, previousPlayer: player);
     }
   }
 
@@ -745,12 +745,12 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     );
   }
 
-  void _showResultDialog({
+  Future<void> _showResultDialog({
     required bool isWon,
     required BattleState state,
     required Player previousPlayer,
-  }) {
-    showDialog(
+  }) async {
+    final action = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -855,15 +855,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(ctx); // Close dialog
-                Navigator.pop(context); // Back to Home/Map
+                Navigator.pop(ctx, 'home');
               },
               child: const Text('Về Trang Chủ', style: TextStyle(color: Colors.white60)),
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(ctx);
-                _startBattle(); // Re-fight!
+                Navigator.pop(ctx, 'retry');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: isWon ? AppTheme.goldAccent : AppTheme.redAccent,
@@ -877,5 +875,105 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
         );
       },
     );
+
+    if (action != null) {
+      await _checkPostBattleTutorials(isWon, state.droppedEquipment.isNotEmpty);
+      if (!mounted) return;
+      if (action == 'retry') {
+        _startBattle();
+      } else {
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  Future<void> _checkPostBattleTutorials(bool isWon, bool hasDrops) async {
+    final player = ref.read(playerProvider);
+    if (isWon && !player.hasSeenTutorialFirstWin) {
+      ref.read(playerProvider.notifier).markTutorialFirstWinSeen();
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.bgSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+          ),
+          title: Row(
+            children: [
+              const Text('✨ ', style: TextStyle(fontSize: 22)),
+              Text(
+                'Chiến Thắng Đầu Tiên!',
+                style: GoogleFonts.cinzel(
+                  color: AppTheme.goldAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Bạn nhận được điểm chỉ số — vào tab Chỉ số để cộng.',
+            style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
+              child: const Text('Đã hiểu', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final updatedPlayer = ref.read(playerProvider);
+    if (hasDrops && !updatedPlayer.hasSeenTutorialFirstDrop) {
+      ref.read(playerProvider.notifier).markTutorialFirstDropSeen();
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppTheme.bgSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: AppTheme.blueAccent, width: 1.5),
+          ),
+          title: Row(
+            children: [
+              const Text('🎁 ', style: TextStyle(fontSize: 22)),
+              Text(
+                'Nhặt Được Trang Bị!',
+                style: GoogleFonts.cinzel(
+                  color: AppTheme.blueAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Vào tab Trang bị để xem.',
+            style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.blueAccent),
+              child: const Text('Đã hiểu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

@@ -38,6 +38,11 @@ class BattleState {
   final String? activeSkillCastName;
   final double battleDuration;
   final bool triggeredSpeedrunBonus;
+  final int totalDamageDealt;
+  final int totalDamageTaken;
+  final int totalHealed;
+  final int highestCritDamage;
+  final double battleSpeed;
 
   const BattleState({
     required this.heroHp,
@@ -57,7 +62,16 @@ class BattleState {
     this.activeSkillCastName,
     this.battleDuration = 0.0,
     this.triggeredSpeedrunBonus = false,
+    this.totalDamageDealt = 0,
+    this.totalDamageTaken = 0,
+    this.totalHealed = 0,
+    this.highestCritDamage = 0,
+    this.battleSpeed = 1.0,
   });
+
+  double get dps => battleDuration > 0
+      ? (totalDamageDealt / battleDuration)
+      : totalDamageDealt.toDouble();
 
   BattleState copyWith({
     int? heroHp,
@@ -75,6 +89,13 @@ class BattleState {
     int? earnedGold,
     List<Equipment>? droppedEquipment,
     String? activeSkillCastName,
+    double? battleDuration,
+    bool? triggeredSpeedrunBonus,
+    int? totalDamageDealt,
+    int? totalDamageTaken,
+    int? totalHealed,
+    int? highestCritDamage,
+    double? battleSpeed,
     bool clearSkillCast = false,
   }) {
     return BattleState(
@@ -95,6 +116,13 @@ class BattleState {
       activeSkillCastName: clearSkillCast
           ? null
           : (activeSkillCastName ?? this.activeSkillCastName),
+      battleDuration: battleDuration ?? this.battleDuration,
+      triggeredSpeedrunBonus: triggeredSpeedrunBonus ?? this.triggeredSpeedrunBonus,
+      totalDamageDealt: totalDamageDealt ?? this.totalDamageDealt,
+      totalDamageTaken: totalDamageTaken ?? this.totalDamageTaken,
+      totalHealed: totalHealed ?? this.totalHealed,
+      highestCritDamage: highestCritDamage ?? this.highestCritDamage,
+      battleSpeed: battleSpeed ?? this.battleSpeed,
     );
   }
 }

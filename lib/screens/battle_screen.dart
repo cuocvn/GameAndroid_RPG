@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,12 +42,19 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   MilestoneRewardResult? _milestoneResult;
   bool _showCombatLogOverlay = false;
 
+  double _battleSpeed = 1.0;
+  bool _autoNext = false;
+  late int _currentZoneId;
+  late int _currentStage;
+
   late AnimationController _breathingController;
   late Animation<double> _breathingAnimation;
 
   @override
   void initState() {
     super.initState();
+    _currentZoneId = widget.zoneId;
+    _currentStage = widget.stage;
 
     _breathingController = AnimationController(
       vsync: this,
@@ -63,10 +71,10 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _dialogShown = false;
     _milestoneResult = null;
     final player = ref.read(playerProvider);
-    if (widget.isEndless || widget.zoneId == 99) {
-      _enemy = SeedEnemies.generateEndlessEnemy(widget.stage);
+    if (widget.isEndless || _currentZoneId == 99) {
+      _enemy = SeedEnemies.generateEndlessEnemy(_currentStage);
     } else {
-      _enemy = SeedEnemies.getEnemy(widget.zoneId, widget.stage);
+      _enemy = SeedEnemies.getEnemy(_currentZoneId, _currentStage);
     }
 
     _battleService = BattleService(
@@ -88,7 +96,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
         }
       },
     );
-
+    _battleService.setBattleSpeed(_battleSpeed);
     _battleService.start();
   }
 
@@ -103,8 +111,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             exp: state.earnedExp,
             gold: state.earnedGold,
             drops: state.droppedEquipment,
-            foughtZone: widget.zoneId,
-            foughtStage: widget.stage,
+            foughtZone: _currentZoneId,
+            foughtStage: _currentStage,
             triggeredSpeedrun: state.triggeredSpeedrunBonus,
           );
 
@@ -125,7 +133,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final state = _currentState;
-    final zone = (widget.isEndless || widget.zoneId == 99)
+    final zone = (widget.isEndless || _currentZoneId == 99)
         ? const ZoneInfo(
             id: 99,
             name: 'Tháp Vô Tận',
@@ -135,7 +143,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             stageCount: 100,
           )
         : SeedEnemies.zones.firstWhere(
-            (z) => z.id == widget.zoneId,
+            (z) => z.id == _currentZoneId,
             orElse: () => SeedEnemies.zones.first,
           );
 
@@ -234,14 +242,14 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
 
   Widget _buildTopNavigationHeader(ZoneInfo zone) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.white70, size: 18),
+                icon: const Icon(Icons.arrow_back_ios, color: Colors.white70, size: 16),
                 onPressed: () {
                   _battleService.stop();
                   Navigator.pop(context);
@@ -251,17 +259,19 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${zone.name} • Ải ${widget.stage}',
+                    (widget.isEndless || _currentZoneId == 99)
+                        ? 'Tháp Vô Tận • Tầng $_currentStage'
+                        : '${zone.name} • Ải $_currentStage',
                     style: GoogleFonts.cinzel(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 13,
                       color: Colors.white,
                     ),
                   ),
                   Text(
                     _enemy.isBoss ? '👑 TRÙM CUỐI VÙNG ĐẤT' : '⚔️ Quái vật nguy hiểm',
                     style: GoogleFonts.inter(
-                      fontSize: 10.5,
+                      fontSize: 10,
                       color: _enemy.isBoss ? AppTheme.goldAccent : Colors.white60,
                       fontWeight: _enemy.isBoss ? FontWeight.bold : FontWeight.normal,
                     ),
@@ -270,31 +280,130 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
               ),
             ],
           ),
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () {
-              HapticFeedback.lightImpact();
-              _battleService.stop();
-              Navigator.pop(context);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white24, width: 1),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.flag_outlined, size: 14, color: Colors.white70),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Rút lui',
-                    style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+          Row(
+            children: [
+              // 1. Speed multiplier toggle pill
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    if (_battleSpeed == 1.0) {
+                      _battleSpeed = 1.5;
+                    } else if (_battleSpeed == 1.5) {
+                      _battleSpeed = 2.0;
+                    } else if (_battleSpeed == 2.0) {
+                      _battleSpeed = 3.0;
+                    } else {
+                      _battleSpeed = 1.0;
+                    }
+                  });
+                  _battleService.setBattleSpeed(_battleSpeed);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _battleSpeed > 1.0
+                        ? AppTheme.goldAccent.withValues(alpha: 0.2)
+                        : Colors.white10,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _battleSpeed > 1.0
+                          ? AppTheme.goldAccent
+                          : Colors.white24,
+                    ),
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.bolt,
+                        size: 13,
+                        color: _battleSpeed > 1.0 ? AppTheme.goldAccent : Colors.white70,
+                      ),
+                      Text(
+                        ' ${_battleSpeed == 1.0 ? "1x" : "${_battleSpeed}x"}',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: _battleSpeed > 1.0 ? AppTheme.goldAccent : Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 6),
+
+              // 2. Auto-Next toggle pill
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _autoNext = !_autoNext;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _autoNext
+                        ? AppTheme.greenAccent.withValues(alpha: 0.2)
+                        : Colors.white10,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _autoNext ? AppTheme.greenAccent : Colors.white24,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.autorenew,
+                        size: 13,
+                        color: _autoNext ? AppTheme.greenAccent : Colors.white60,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        'AUTO',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: _autoNext ? AppTheme.greenAccent : Colors.white60,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // 3. Retreat button
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _battleService.stop();
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.redAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.redAccent.withValues(alpha: 0.5)),
+                  ),
+                  child: Text(
+                    'Rút lui',
+                    style: GoogleFonts.cinzel(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.redAccent,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -765,6 +874,18 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     required BattleState state,
     required Player previousPlayer,
   }) async {
+    final canAdvance = (widget.isEndless || _currentZoneId == 99) ||
+        (_currentStage < 5 || _currentZoneId < 5);
+
+    Timer? autoTimer;
+    if (_autoNext && isWon && canAdvance) {
+      autoTimer = Timer(const Duration(milliseconds: 1800), () {
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.of(context, rootNavigator: true).pop('next');
+        }
+      });
+    }
+
     final action = await showDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -788,113 +909,228 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
               ),
             ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isWon) ...[
-                Text(
-                  'Bạn đã xuất sắc đánh bại ${_enemy.name}!',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Kinh nghiệm:', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                          Text('+${state.earnedExp} EXP', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.purpleAccent, fontSize: 12)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Vàng kiếm được:', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                          Text('+${state.earnedGold} 🪙', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.goldAccent, fontSize: 12)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (state.droppedEquipment.isNotEmpty) ...[
-                  const SizedBox(height: 10),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isWon) ...[
                   Text(
-                    '🎁 RƠI TRANG BỊ:',
-                    style: GoogleFonts.cinzel(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+                    'Bạn đã xuất sắc đánh bại ${_enemy.name}!',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
                   ),
-                  ...state.droppedEquipment.map((item) {
-                    final color = AppTheme.getRarityColor(item.rarity);
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        '${item.emoji} ${item.name} (${item.rarity.label})',
-                        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    );
-                  }),
-                ],
-                if (_milestoneResult != null) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
+                  // EXP & Gold Rewards
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppTheme.goldAccent.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.goldAccent),
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white12),
                     ),
-                    child: Text(
-                      '${_milestoneResult!.message}\n${_milestoneResult!.unlockedSkillName ?? ""}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Kinh nghiệm:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                            Text('+${state.earnedExp} EXP', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.purpleAccent, fontSize: 12)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Vàng kiếm được:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                            Text('+${state.earnedGold} 🪙', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.goldAccent, fontSize: 12)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Combat Analytics Card
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('⚔️ Sát thương (DPS):', style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+                            Text('${state.totalDamageDealt} (${state.dps.toStringAsFixed(1)}/s)', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.redAccent)),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('💥 Chí mạng lớn nhất:', style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+                            Text('${state.highestCritDamage}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.goldAccent)),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('🛡️ Sát thương gánh chịu:', style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+                            Text('${state.totalDamageTaken}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.blueAccent)),
+                          ],
+                        ),
+                        if (state.totalHealed > 0) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('💚 Lượng máu hồi phục:', style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+                              Text('+${state.totalHealed} HP', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.greenAccent)),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (state.droppedEquipment.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '🎁 RƠI TRANG BỊ:',
+                      style: GoogleFonts.cinzel(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+                    ),
+                    ...state.droppedEquipment.map((item) {
+                      final color = AppTheme.getRarityColor(item.rarity);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          '${item.emoji} ${item.name} (${item.rarity.label})',
+                          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      );
+                    }),
+                  ],
+                  if (_milestoneResult != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.goldAccent.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.goldAccent),
+                      ),
+                      child: Text(
+                        '${_milestoneResult!.message}\n${_milestoneResult!.unlockedSkillName ?? ""}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+                      ),
+                    ),
+                  ],
+                  if (_autoNext && canAdvance) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '⚡ Đang tự động sang ải kế tiếp...',
+                      style: GoogleFonts.inter(fontSize: 10.5, fontStyle: FontStyle.italic, color: AppTheme.greenAccent),
+                    ),
+                  ],
+                ] else ...[
+                  Text(
+                    'Bạn đã gục ngã trước ${_enemy.name}.\nHãy nâng cấp trang bị, tinh chỉnh phân bổ điểm chỉ số hoặc trang bị kỹ năng phù hợp hơn!',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70, height: 1.4),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('⚔️ Đã gây ra (DPS):', style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+                            Text('${state.totalDamageDealt} (${state.dps.toStringAsFixed(1)}/s)', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.redAccent)),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('🛡️ Sát thương đã nhận:', style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+                            Text('${state.totalDamageTaken}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.blueAccent)),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ] else ...[
-                Text(
-                  'Bạn đã gục ngã trước ${_enemy.name}.\nHãy nâng cấp trang bị, tinh chỉnh phân bổ điểm chỉ số hoặc trang bị kỹ năng phù hợp hơn!',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70, height: 1.4),
-                ),
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () {
+                autoTimer?.cancel();
                 Navigator.pop(ctx, 'home');
               },
               child: const Text('Về Trang Chủ', style: TextStyle(color: Colors.white60)),
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx, 'retry');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isWon ? AppTheme.goldAccent : AppTheme.redAccent,
+            if (isWon && canAdvance)
+              ElevatedButton(
+                onPressed: () {
+                  autoTimer?.cancel();
+                  Navigator.pop(ctx, 'next');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.greenAccent,
+                ),
+                child: Text(
+                  widget.isEndless || _currentZoneId == 99 ? 'Tầng Kế ⏩' : 'Ải Kế Tiếp ⏩',
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                ),
+              )
+            else
+              ElevatedButton(
+                onPressed: () {
+                  autoTimer?.cancel();
+                  Navigator.pop(ctx, 'retry');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isWon ? AppTheme.goldAccent : AppTheme.redAccent,
+                ),
+                child: Text(
+                  isWon ? 'Đánh Lại' : 'Thử Lại',
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                ),
               ),
-              child: Text(
-                isWon ? 'Đánh Lại' : 'Thử Lại',
-                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-              ),
-            ),
           ],
         );
       },
     );
+    autoTimer?.cancel();
 
     if (action != null) {
       await _checkPostBattleTutorials(isWon, state.droppedEquipment.isNotEmpty);
       if (!mounted) return;
-      if (action == 'retry') {
+      if (action == 'next') {
+        if (widget.isEndless || _currentZoneId == 99) {
+          _currentStage++;
+        } else {
+          if (_currentStage < 5) {
+            _currentStage++;
+          } else if (_currentZoneId < 5) {
+            _currentZoneId++;
+            _currentStage = 1;
+          }
+        }
+        _startBattle();
+      } else if (action == 'retry') {
         _startBattle();
       } else {
         Navigator.pop(context);

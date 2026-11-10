@@ -40,6 +40,16 @@ class BattleService {
   final List<String> _battleLog = [];
   bool _isFinished = false;
 
+  double battleSpeed = 1.0;
+  int _totalDamageDealt = 0;
+  int _totalDamageTaken = 0;
+  int _totalHealed = 0;
+  int _highestCrit = 0;
+
+  void setBattleSpeed(double speed) {
+    battleSpeed = speed;
+  }
+
   BattleService({
     required this.player,
     required Enemy enemy,
@@ -81,7 +91,7 @@ class BattleService {
         timer.cancel();
         return;
       }
-      _update(0.10);
+      _update(0.10 * battleSpeed);
     });
   }
 
@@ -150,6 +160,7 @@ class BattleService {
         enemy.burnTicksLeft--;
         final burnDmg = enemy.burnDamagePerTick;
         enemy.currentHp = max(0, enemy.currentHp - burnDmg);
+        _totalDamageDealt += burnDmg;
         _addFloatingText('$burnDmg ♨️', Colors.deepOrangeAccent,
             isHeroTarget: false);
         _addLog('${enemy.name} chịu $burnDmg sát thương thiêu đốt.');
@@ -258,6 +269,7 @@ class BattleService {
     if (chosenSkill.healsHero) {
       final healVal = (_heroMaxHp * 0.25).round();
       _heroHp = min(_heroMaxHp, _heroHp + healVal);
+      _totalHealed += healVal;
       _addFloatingText('+$healVal HP 💚', Colors.greenAccent, isHeroTarget: true);
       _addLog('Bạn hồi phục $healVal HP bằng ${chosenSkill.name}.');
       return;
@@ -307,6 +319,10 @@ class BattleService {
     // Defense mitigation
     int netDamage = max(1, (rawDamage - enemy.def).round());
     enemy.currentHp = max(0, enemy.currentHp - netDamage);
+    _totalDamageDealt += netDamage;
+    if (isCrit && netDamage > _highestCrit) {
+      _highestCrit = netDamage;
+    }
 
     // Apply Burn status effect if skill causes burn
     if (chosenSkill.causesBurn) {
@@ -343,6 +359,7 @@ class BattleService {
     // Zone 4: Reflect Damage (Phản đòn 20%)
     if (enemy.reflectDamagePercent > 0 && netDamage > 0) {
       int reflectDmg = max(1, (netDamage * enemy.reflectDamagePercent).round());
+      _totalDamageTaken += reflectDmg;
       if (_heroShield > 0) {
         if (_heroShield >= reflectDmg) {
           _heroShield -= reflectDmg;
@@ -405,6 +422,7 @@ class BattleService {
       }
 
       _heroHp = max(0, _heroHp - netDmg);
+      _totalDamageTaken += netDmg;
 
       String enemyHitText = isSpecial ? '$attackName\n-$netDmg' : '-$netDmg';
       if (isCrit) enemyHitText = 'CRIT! -$netDmg 💥';
@@ -523,6 +541,11 @@ class BattleService {
       activeSkillCastName: _activeBanner,
       battleDuration: battleDuration ?? _battleDuration,
       triggeredSpeedrunBonus: triggeredSpeedrunBonus,
+      totalDamageDealt: _totalDamageDealt,
+      totalDamageTaken: _totalDamageTaken,
+      totalHealed: _totalHealed,
+      highestCritDamage: _highestCrit,
+      battleSpeed: battleSpeed,
     );
   }
 

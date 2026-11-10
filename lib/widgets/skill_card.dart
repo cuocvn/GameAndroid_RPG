@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/skill.dart';
+import '../theme/app_theme.dart';
 
 class SkillCard extends StatelessWidget {
   final Skill skill;
@@ -26,15 +29,15 @@ class SkillCard extends StatelessWidget {
 
     switch (skill.type) {
       case SkillType.basic:
-        typeColor = Colors.lightBlueAccent;
+        typeColor = AppTheme.blueAccent;
         typeLabel = 'Đánh thường';
         break;
       case SkillType.active:
-        typeColor = Colors.orangeAccent;
+        typeColor = AppTheme.goldAccent;
         typeLabel = 'Chủ động';
         break;
       case SkillType.passive:
-        typeColor = Colors.purpleAccent;
+        typeColor = AppTheme.purpleAccent;
         typeLabel = 'Bị động';
         break;
     }
@@ -42,163 +45,185 @@ class SkillCard extends StatelessWidget {
     final isUnlocked = currentLevel > 0;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isUnlocked
-            ? Colors.grey.shade900.withOpacity(0.9)
-            : Colors.grey.shade900.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(12),
+        gradient: AppTheme.surfaceGradient,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isEquippedForBattle
-              ? Colors.amberAccent
-              : (isUnlocked ? typeColor.withOpacity(0.6) : Colors.grey.shade700),
-          width: isEquippedForBattle ? 2 : 1,
+              ? AppTheme.goldAccent
+              : (isUnlocked ? typeColor.withOpacity(0.5) : Colors.white10),
+          width: isEquippedForBattle ? 2.0 : 1.0,
         ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Emoji/Icon
-          Container(
-            width: 52,
-            height: 52,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: typeColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: typeColor.withOpacity(0.6), width: 1.5),
-            ),
-            child: Text(
-              skill.emoji,
-              style: const TextStyle(fontSize: 26),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Skill Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        skill.name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: isUnlocked ? Colors.white : Colors.white60,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        typeLabel,
-                        style: TextStyle(
-                          color: typeColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  skill.description,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                // Tags: Cost, CD, Level
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    _tag(
-                      'Cấp: $currentLevel/${skill.maxLevel}',
-                      isUnlocked ? Colors.greenAccent : Colors.grey,
-                    ),
-                    if (skill.manaCost > 0)
-                      _tag('💧 ${skill.manaCost} Mana', Colors.cyanAccent),
-                    if (skill.cooldown > 0)
-                      _tag('⏱️ ${skill.cooldown.toStringAsFixed(1)}s CD', Colors.tealAccent),
-                    if (skill.causesBurn)
-                      _tag('🔥 Gây Thiêu Đốt', Colors.deepOrangeAccent),
-                    if (skill.grantsShield)
-                      _tag('🛡️ Tạo Khiên Hộ Thân', Colors.amberAccent),
-                    if (skill.fireDmgBonus > 0)
-                      _tag('+${(skill.currentFireDmgBonus * 100).round()}% Lửa', Colors.redAccent),
-                    if (skill.burnTargetBonus > 0)
-                      _tag('+${(skill.currentBurnTargetBonus * 100).round()}% lên mục tiêu Cháy', Colors.orangeAccent),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Action buttons
-          Column(
-            children: [
-              if (canUpgrade && currentLevel < skill.maxLevel)
-                ElevatedButton(
-                  onPressed: onUpgrade,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber.shade700,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: const Size(60, 30),
-                  ),
-                  child: const Text('Nâng +1', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                ),
-              if (isUnlocked && skill.type != SkillType.passive) ...[
-                const SizedBox(height: 6),
-                OutlinedButton(
-                  onPressed: onToggleEquip,
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(
-                      color: isEquippedForBattle ? Colors.amberAccent : Colors.grey,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: const Size(60, 28),
-                  ),
-                  child: Text(
-                    isEquippedForBattle ? 'Đang bật' : 'Trang bị',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isEquippedForBattle ? Colors.amberAccent : Colors.white70,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+        boxShadow: [
+          BoxShadow(
+            color: isEquippedForBattle
+                ? AppTheme.goldAccent.withOpacity(0.25)
+                : Colors.black.withOpacity(0.35),
+            blurRadius: isEquippedForBattle ? 10 : 6,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-    );
-  }
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Emoji / Icon Container
+              Container(
+                width: 52,
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isUnlocked
+                      ? typeColor.withOpacity(0.18)
+                      : Colors.black45,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isUnlocked ? typeColor.withOpacity(0.7) : Colors.white24,
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  skill.emoji,
+                  style: TextStyle(
+                    fontSize: 26,
+                    color: isUnlocked ? null : Colors.grey,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
 
-  Widget _tag(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.4), width: 0.8),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+              // Title, Tag & Rank
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            skill.name,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: isUnlocked ? Colors.white : Colors.white60,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: typeColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: typeColor.withOpacity(0.5), width: 1),
+                          ),
+                          child: Text(
+                            typeLabel,
+                            style: GoogleFonts.inter(
+                              color: typeColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Text(
+                          isUnlocked
+                              ? 'Cấp $currentLevel / ${skill.maxLevel}'
+                              : 'Chưa mở khóa',
+                          style: GoogleFonts.inter(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: isUnlocked ? AppTheme.goldAccent : Colors.grey,
+                          ),
+                        ),
+                        if (skill.manaCost > 0) ...[
+                          const SizedBox(width: 10),
+                          Text(
+                            '💧 ${skill.manaCost} MP',
+                            style: const TextStyle(fontSize: 11, color: AppTheme.blueAccent),
+                          ),
+                        ],
+                        if (skill.cooldown > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '⏱️ ${skill.cooldown}s',
+                            style: const TextStyle(fontSize: 11, color: Colors.orangeAccent),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+          Text(
+            skill.description,
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              color: Colors.white70,
+              height: 1.3,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+          // Action Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (isUnlocked && skill.type != SkillType.passive && onToggleEquip != null)
+                OutlinedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onToggleEquip?.call();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isEquippedForBattle ? AppTheme.goldAccent : Colors.white70,
+                    side: BorderSide(
+                      color: isEquippedForBattle ? AppTheme.goldAccent : Colors.white24,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    minimumSize: Size.zero,
+                  ),
+                  child: Text(
+                    isEquippedForBattle ? '✓ Đang Ra Trận' : 'Cài Xuất Trận',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              if (onUpgrade != null && currentLevel < skill.maxLevel)
+                ElevatedButton(
+                  onPressed: canUpgrade
+                      ? () {
+                          HapticFeedback.lightImpact();
+                          onUpgrade?.call();
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.goldAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    minimumSize: Size.zero,
+                  ),
+                  child: Text(
+                    isUnlocked ? 'Nâng Cấp (+1)' : 'Mở Khóa',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

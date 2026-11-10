@@ -39,6 +39,9 @@ class Player {
   final bool hasSeenTutorialFirstWin;
   final bool hasSeenTutorialFirstDrop;
 
+  // Anti-trivialize: Cleared under 8s buffs next stage difficulty by +15%
+  final double nextStageDifficultyBonus;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -72,18 +75,34 @@ class Player {
     this.hasSeenTutorialHome = false,
     this.hasSeenTutorialFirstWin = false,
     this.hasSeenTutorialFirstDrop = false,
+    this.nextStageDifficultyBonus = 0.0,
   });
 
   /// Required EXP to level up
   int get expToNextLevel => level * 100 + (level * level * 20);
 
-  /// Combined raw stats including equipment bonuses
+  /// Combined raw stats with gear bonuses capped at +150% of base
   Stats get totalStats {
-    Stats res = stats;
-    if (equippedWeapon != null) res = res + equippedWeapon!.bonusStats;
-    if (equippedArmor != null) res = res + equippedArmor!.bonusStats;
-    if (equippedAccessory != null) res = res + equippedAccessory!.bonusStats;
-    return res;
+    Stats gearBonus = const Stats(str: 0, int_: 0, vit: 0, agi: 0, luk: 0);
+    if (equippedWeapon != null) gearBonus = gearBonus + equippedWeapon!.bonusStats;
+    if (equippedArmor != null) gearBonus = gearBonus + equippedArmor!.bonusStats;
+    if (equippedAccessory != null) gearBonus = gearBonus + equippedAccessory!.bonusStats;
+
+    final maxBonusStr = max(5, (stats.str * 1.5).round());
+    final maxBonusInt = max(5, (stats.int_ * 1.5).round());
+    final maxBonusVit = max(5, (stats.vit * 1.5).round());
+    final maxBonusAgi = max(5, (stats.agi * 1.5).round());
+    final maxBonusLuk = max(5, (stats.luk * 1.5).round());
+
+    final clampedBonus = Stats(
+      str: gearBonus.str.clamp(0, maxBonusStr),
+      int_: gearBonus.int_.clamp(0, maxBonusInt),
+      vit: gearBonus.vit.clamp(0, maxBonusVit),
+      agi: gearBonus.agi.clamp(0, maxBonusAgi),
+      luk: gearBonus.luk.clamp(0, maxBonusLuk),
+    );
+
+    return stats + clampedBonus;
   }
 
   // --- Derived combat numbers ---
@@ -129,10 +148,11 @@ class Player {
     return min(0.50, rate);
   }
 
-  /// Crit Damage: Base 150% + Frenzy bonus
+  /// Crit Damage: Base 150% + Frenzy bonus (Capped at 250%)
   double get critDamageMultiplier {
     final frenzyRank = skillLevels['frenzy'] ?? 0;
-    return 1.50 + (frenzyRank * 0.15);
+    final mult = 1.50 + (frenzyRank * 0.15);
+    return min(2.50, mult);
   }
 
   /// Dodge chance: AGI * 0.3% (capped at 40%)
@@ -191,6 +211,7 @@ class Player {
     bool? hasSeenTutorialHome,
     bool? hasSeenTutorialFirstWin,
     bool? hasSeenTutorialFirstDrop,
+    double? nextStageDifficultyBonus,
   }) {
     return Player(
       name: name ?? this.name,
@@ -218,6 +239,7 @@ class Player {
       hasSeenTutorialHome: hasSeenTutorialHome ?? this.hasSeenTutorialHome,
       hasSeenTutorialFirstWin: hasSeenTutorialFirstWin ?? this.hasSeenTutorialFirstWin,
       hasSeenTutorialFirstDrop: hasSeenTutorialFirstDrop ?? this.hasSeenTutorialFirstDrop,
+      nextStageDifficultyBonus: nextStageDifficultyBonus ?? this.nextStageDifficultyBonus,
     );
   }
 

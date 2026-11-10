@@ -11,7 +11,7 @@ import 'loot_service.dart';
 
 class BattleService {
   final Player player;
-  final Enemy enemy;
+  late Enemy enemy;
   final void Function(BattleState state) onStateChanged;
   final void Function(BattleState finalState) onBattleEnded;
 
@@ -24,6 +24,7 @@ class BattleService {
   late int _heroMaxMana;
   int _heroShield = 0;
 
+  double _battleDuration = 0.0;
   double _heroAttackTimer = 0.0;
   double _enemyAttackTimer = 0.0;
   double _manaRegenAccumulator = 0.0;
@@ -41,24 +42,33 @@ class BattleService {
 
   BattleService({
     required this.player,
-    required this.enemy,
+    required Enemy enemy,
     required this.onStateChanged,
     required this.onBattleEnded,
   }) {
+    if (player.nextStageDifficultyBonus > 0) {
+      this.enemy = enemy.clone(statMultiplier: 1.0 + player.nextStageDifficultyBonus);
+    } else {
+      this.enemy = enemy;
+    }
+
     _heroMaxHp = player.maxHp;
     _heroHp = _heroMaxHp;
     _heroMaxMana = player.maxMana;
-    _heroMana = 20; // Start battle with a little initial mana
+    _heroMana = 20; // Start battle with some initial mana
 
-    _addLog('Bắt đầu giao chiến với ${enemy.name}!');
-    if (enemy.magicResistPercent > 0) {
-      _addLog('⚠️ Kẻ địch có nội tại [Kháng Phép ${(enemy.magicResistPercent * 100).round()}%]!');
+    _addLog('Bắt đầu giao chiến với ${this.enemy.name}!');
+    if (player.nextStageDifficultyBonus > 0) {
+      _addLog('⚡ Áp dụng độ khó +${(player.nextStageDifficultyBonus * 100).round()}% do vượt ải thần tốc!');
     }
-    if (enemy.reflectDamagePercent > 0) {
-      _addLog('⚠️ Kẻ địch có nội tại [Phản Đòn ${(enemy.reflectDamagePercent * 100).round()}%]!');
+    if (this.enemy.magicResistPercent > 0) {
+      _addLog('⚠️ Kẻ địch có nội tại [🛡️ Kháng Phép ${(this.enemy.magicResistPercent * 100).round()}%]!');
     }
-    if (enemy.hpRegenPercentPerSecond > 0) {
-      _addLog('⚠️ Kẻ địch có nội tại [Hồi Máu ${(enemy.hpRegenPercentPerSecond * 100).round()}%/giây]!');
+    if (this.enemy.reflectDamagePercent > 0) {
+      _addLog('⚠️ Kẻ địch có nội tại [⚡ Phản Đòn ${(this.enemy.reflectDamagePercent * 100).round()}%]!');
+    }
+    if (this.enemy.hpRegenPercentPerSecond > 0) {
+      _addLog('⚠️ Kẻ địch có nội tại [💚 Hồi Máu ${(this.enemy.hpRegenPercentPerSecond * 100).round()}%/giây]!');
     }
 
     _emitState(isFighting: true);
@@ -83,7 +93,15 @@ class BattleService {
     onBattleEnded(finalState);
   }
 
+  /// Helper for automated fast balance testing / headless simulation
+  void simulateTick(double dt) {
+    if (_isFinished) return;
+    _update(dt);
+  }
+
   void _update(double dt) {
+    _battleDuration += dt;
+
     // 1. Update Cooldowns
     _cooldowns.forEach((key, val) {
       if (val > 0) {
@@ -91,7 +109,7 @@ class BattleService {
       }
     });
 
-    // 2. Banner timer for Active Skills (0.8s)
+    // 2. Banner timer for Active Skills (0.8s - 1.2s)
     if (_activeBanner != null) {
       _bannerTimer -= dt;
       if (_bannerTimer <= 0) {
@@ -112,7 +130,19 @@ class BattleService {
       _manaRegenAccumulator = 0.0;
     }
 
-    // 5. Burn Dot on Enemy
+    // 5. Boss Vùng 5 (Diablo) Cuồng Nộ dưới 30% HP
+    if (!enemy.isEnraged &&
+        (enemy.id.contains('z5_boss') || enemy.name.toUpperCase().contains('DIABLO')) &&
+        enemy.currentHp <= (enemy.maxHp * 0.30) &&
+        !enemy.isDead) {
+      enemy.isEnraged = true;
+      _activeBanner = '🔥 DIABLO NỔI GIẬN!';
+      _bannerTimer = 1.2;
+      _addFloatingText('🔥 CUỒNG NỘ!', Colors.deepOrangeAccent, isHeroTarget: false);
+      _addLog('🔥 DIABLO BẮT ĐẦU CUỒNG NỘ! Tăng 50% Công và 30% Tốc đánh!');
+    }
+
+    // 6. Burn Dot on Enemy
     if (enemy.burnTicksLeft > 0) {
       _burnTickAccumulator += dt;
       if (_burnTickAccumulator >= 1.0) {
@@ -131,7 +161,7 @@ class BattleService {
       }
     }
 
-    // 6. Zone 5 Monster HP Regeneration (5%/second)
+    // 7. Zone 5 Monster HP Regeneration (5%/second)
     if (enemy.hpRegenPercentPerSecond > 0 &&
         enemy.currentHp < enemy.maxHp &&
         !enemy.isDead) {
@@ -141,12 +171,12 @@ class BattleService {
         final healVal =
             max(5, (enemy.maxHp * enemy.hpRegenPercentPerSecond).round());
         enemy.currentHp = min(enemy.maxHp, enemy.currentHp + healVal);
-        _addFloatingText('+$healVal 💚', Colors.greenAccent, isHeroTarget: false);
-        _addLog('${enemy.name} kích hoạt Hồi Máu +$healVal HP.');
+        _addFloatingText('+$healVal HP', Colors.greenAccent, isHeroTarget: false);
+        _addLog('${enemy.name} hồi sinh lực +$healVal HP.');
       }
     }
 
-    // 7. Hero Action Loop
+    // 8. Hero Action Loop
     _heroAttackTimer += dt;
     final heroInterval = player.attackInterval;
     if (_heroAttackTimer >= heroInterval) {
@@ -158,7 +188,7 @@ class BattleService {
       }
     }
 
-    // 8. Enemy Action Loop
+    // 9. Enemy Action Loop
     _enemyAttackTimer += dt;
     final enemyInterval = enemy.attackInterval;
     if (_enemyAttackTimer >= enemyInterval) {
@@ -176,17 +206,31 @@ class BattleService {
   void _executeHeroAction() {
     Skill? chosenSkill;
 
-    for (final skillId in player.equippedSkillIds) {
-      final skill = SeedSkills.getById(skillId);
-      final cd = _cooldowns[skillId] ?? 0.0;
-
-      if (skill.type == SkillType.active) {
-        if (_heroMana >= skill.manaCost && cd <= 0.0) {
+    // Tactical AI Priority: If Hero HP < 70% and a healing skill is off cooldown, prioritize healing!
+    if (_heroHp < _heroMaxHp * 0.70) {
+      for (final skillId in player.equippedSkillIds) {
+        final skill = SeedSkills.getById(skillId);
+        final cd = _cooldowns[skillId] ?? 0.0;
+        if (skill.healsHero && _heroMana >= skill.manaCost && cd <= 0.0) {
           chosenSkill = skill;
           break;
         }
-      } else if (skill.type == SkillType.basic && chosenSkill == null) {
-        chosenSkill = skill;
+      }
+    }
+
+    if (chosenSkill == null) {
+      for (final skillId in player.equippedSkillIds) {
+        final skill = SeedSkills.getById(skillId);
+        final cd = _cooldowns[skillId] ?? 0.0;
+
+        if (skill.type == SkillType.active) {
+          if (_heroMana >= skill.manaCost && cd <= 0.0) {
+            chosenSkill = skill;
+            break;
+          }
+        } else if (skill.type == SkillType.basic && chosenSkill == null) {
+          chosenSkill = skill;
+        }
       }
     }
 
@@ -210,9 +254,9 @@ class BattleService {
       return;
     }
 
-    // Healing skill
+    // Healing skill (Max 25% Max HP, 15s cooldown)
     if (chosenSkill.healsHero) {
-      final healVal = (_heroMaxHp * 0.35).round();
+      final healVal = (_heroMaxHp * 0.25).round();
       _heroHp = min(_heroMaxHp, _heroHp + healVal);
       _addFloatingText('+$healVal HP 💚', Colors.greenAccent, isHeroTarget: true);
       _addLog('Bạn hồi phục $healVal HP bằng ${chosenSkill.name}.');
@@ -250,8 +294,11 @@ class BattleService {
       rawDamage *= (1.0 - enemy.magicResistPercent);
     }
 
-    // Crit calculation
-    double critChance = player.critRate + chosenSkill.critRateBonus;
+    // Crit calculation (includes enemy crit reduction modifier)
+    double critChance = max(
+      0.0,
+      player.critRate + chosenSkill.critRateBonus - enemy.critReductionPercent,
+    );
     bool isCrit = _rng.nextDouble() < critChance;
     if (isCrit) {
       rawDamage *= player.critDamageMultiplier;
@@ -268,7 +315,7 @@ class BattleService {
       _addLog('${enemy.name} bị thiêu đốt!');
     }
 
-    // Floating text: Show skill name on basic attack or active
+    // Floating text
     String dmgText = '$netDamage';
     if (isCrit) {
       dmgText = 'CRIT! $netDamage 💥';
@@ -308,7 +355,8 @@ class BattleService {
         _heroHp = max(0, _heroHp - reflectDmg);
       }
 
-      _addFloatingText('-$reflectDmg 🔄', Colors.purpleAccent, isHeroTarget: true);
+      // Red floating text "-X (phản đòn)"
+      _addFloatingText('-$reflectDmg (phản đòn)', Colors.redAccent, isHeroTarget: true);
       _addLog('${player.name} chịu $reflectDmg sát thương phản đòn từ ${enemy.name}!');
 
       if (_heroHp <= 0) {
@@ -319,57 +367,65 @@ class BattleService {
   }
 
   void _executeEnemyAction() {
-    // Check Dodge from player
-    if (_rng.nextDouble() < player.dodgeRate) {
-      _addFloatingText('NÉ!', Colors.grey, isHeroTarget: true);
-      _addLog('${player.name} lanh lẹ né tránh đòn tấn công!');
-      return;
-    }
-
-    double rawDmg = enemy.atk.toDouble();
-    bool isSpecial = false;
-    String attackName = 'Đòn Đánh';
-    if (enemy.specialSkill != null && _rng.nextDouble() < 0.35) {
-      isSpecial = true;
-      rawDmg *= enemy.specialSkill!.damageMultiplier;
-      attackName = enemy.specialSkill!.name;
-      _addLog('${enemy.name} tung chiêu [$attackName]!');
-    }
-
-    bool isCrit = _rng.nextDouble() < enemy.critRate;
-    if (isCrit) {
-      rawDmg *= 1.5;
-    }
-
-    int netDmg = max(1, (rawDmg - player.physicalDef).round());
-
-    // Shield absorb
-    if (_heroShield > 0) {
-      if (_heroShield >= netDmg) {
-        _heroShield -= netDmg;
-        _addFloatingText('-$netDmg Giáp 🛡️', Colors.cyanAccent, isHeroTarget: true);
+    void performSingleStrike() {
+      // Check Dodge from player
+      if (_rng.nextDouble() < player.dodgeRate) {
+        _addFloatingText('NÉ!', Colors.grey, isHeroTarget: true);
+        _addLog('${player.name} lanh lẹ né tránh đòn tấn công!');
         return;
-      } else {
-        netDmg -= _heroShield;
-        _heroShield = 0;
       }
+
+      double rawDmg = enemy.effectiveAtk.toDouble();
+      bool isSpecial = false;
+      String attackName = 'Đòn Đánh';
+      if (enemy.specialSkill != null && _rng.nextDouble() < 0.35) {
+        isSpecial = true;
+        rawDmg *= enemy.specialSkill!.damageMultiplier;
+        attackName = enemy.specialSkill!.name;
+        _addLog('${enemy.name} tung chiêu [$attackName]!');
+      }
+
+      bool isCrit = _rng.nextDouble() < enemy.critRate;
+      if (isCrit) {
+        rawDmg *= 1.5;
+      }
+
+      int netDmg = max(1, (rawDmg - player.physicalDef).round());
+
+      // Shield absorb
+      if (_heroShield > 0) {
+        if (_heroShield >= netDmg) {
+          _heroShield -= netDmg;
+          _addFloatingText('-$netDmg Giáp 🛡️', Colors.cyanAccent, isHeroTarget: true);
+          return;
+        } else {
+          netDmg -= _heroShield;
+          _heroShield = 0;
+        }
+      }
+
+      _heroHp = max(0, _heroHp - netDmg);
+
+      String enemyHitText = isSpecial ? '$attackName\n-$netDmg' : '-$netDmg';
+      if (isCrit) enemyHitText = 'CRIT! -$netDmg 💥';
+
+      _addFloatingText(
+        enemyHitText,
+        isCrit ? Colors.redAccent : Colors.red,
+        isCrit: isCrit,
+        isHeroTarget: true,
+      );
+
+      _addLog(
+        '${enemy.name} dùng [$attackName] gây $netDmg sát thương ${isCrit ? '(CHÍ MẠNG!)' : ''}.',
+      );
     }
 
-    _heroHp = max(0, _heroHp - netDmg);
-
-    String enemyHitText = isSpecial ? '$attackName\n-$netDmg' : '-$netDmg';
-    if (isCrit) enemyHitText = 'CRIT! -$netDmg 💥';
-
-    _addFloatingText(
-      enemyHitText,
-      isCrit ? Colors.redAccent : Colors.red,
-      isCrit: isCrit,
-      isHeroTarget: true,
-    );
-
-    _addLog(
-      '${enemy.name} dùng [$attackName] gây $netDmg sát thương ${isCrit ? '(CHÍ MẠNG!)' : ''}.',
-    );
+    performSingleStrike();
+    // Endless Modifier: Double Strike
+    if (enemy.doubleStrike && _heroHp > 0) {
+      performSingleStrike();
+    }
   }
 
   void _handleVictory() {
@@ -385,12 +441,20 @@ class BattleService {
       }
     }
 
+    // Anti-trivialize: Clear under 8s buffs next stage difficulty by +15%
+    final triggeredSpeedrun = _battleDuration < 8.0;
+    if (triggeredSpeedrun) {
+      _addLog('⚡ Vượt ải thần tốc (< 8s)! Độ khó ải kế tiếp tăng +15%!');
+    }
+
     final finalState = _currentState(
       isFighting: false,
       isWon: true,
       earnedExp: enemy.expReward,
       earnedGold: enemy.goldReward,
       droppedEquipment: drops,
+      battleDuration: _battleDuration,
+      triggeredSpeedrunBonus: triggeredSpeedrun,
     );
 
     _emitDirect(finalState);
@@ -405,6 +469,7 @@ class BattleService {
     final finalState = _currentState(
       isFighting: false,
       isDefeated: true,
+      battleDuration: _battleDuration,
     );
 
     _emitDirect(finalState);
@@ -437,6 +502,8 @@ class BattleService {
     int earnedExp = 0,
     int earnedGold = 0,
     List<Equipment> droppedEquipment = const [],
+    double? battleDuration,
+    bool triggeredSpeedrunBonus = false,
   }) {
     return BattleState(
       heroHp: _heroHp,
@@ -454,6 +521,8 @@ class BattleService {
       earnedGold: earnedGold,
       droppedEquipment: droppedEquipment,
       activeSkillCastName: _activeBanner,
+      battleDuration: battleDuration ?? _battleDuration,
+      triggeredSpeedrunBonus: triggeredSpeedrunBonus,
     );
   }
 

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_enemies.dart';
+import '../models/player.dart';
 import '../providers/game_providers.dart';
+import '../theme/app_theme.dart';
 import 'battle_screen.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
@@ -31,20 +35,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final enemiesInZone = SeedEnemies.getEnemiesForZone(_selectedZoneId);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0E17),
+      backgroundColor: AppTheme.bgDark,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161520),
-        title: const Text(
+        backgroundColor: AppTheme.bgDark,
+        elevation: 0,
+        title: Text(
           'BẢN ĐỒ VÙNG ĐẤT CHIẾN TRƯỜNG',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: GoogleFonts.cinzel(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: AppTheme.goldAccent,
+          ),
         ),
       ),
       body: Column(
         children: [
-          // Horizontal Zone Selector
+          // 1. Horizontal Zone Selector
           Container(
-            height: 120,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            height: 110,
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -55,8 +64,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 final isSelected = zone.id == _selectedZoneId;
 
                 return InkWell(
+                  borderRadius: BorderRadius.circular(14),
                   onTap: isUnlocked
                       ? () {
+                          HapticFeedback.lightImpact();
                           setState(() {
                             _selectedZoneId = zone.id;
                             _selectedStage = 1;
@@ -72,26 +83,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         },
                   child: Container(
                     width: 140,
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    margin: const EdgeInsets.symmetric(horizontal: 5),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.amber.shade900.withOpacity(0.4)
-                          : (isUnlocked ? Colors.grey.shade900 : Colors.black87),
+                      gradient: isSelected
+                          ? AppTheme.goldButtonGradient
+                          : AppTheme.surfaceGradient,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isSelected
-                            ? Colors.amberAccent
-                            : (isUnlocked ? Colors.white24 : Colors.grey.shade800),
+                            ? AppTheme.goldAccent
+                            : (isUnlocked ? Colors.white12 : Colors.white10),
                         width: isSelected ? 2 : 1,
                       ),
+                      boxShadow: isSelected ? AppTheme.goldGlow : null,
                     ),
-                    padding: const EdgeInsets.all(8),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           isUnlocked ? zone.iconEmoji : '🔒',
-                          style: const TextStyle(fontSize: 26),
+                          style: const TextStyle(fontSize: 24),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -99,19 +111,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
+                          style: GoogleFonts.cinzel(
+                            fontSize: 11.5,
                             fontWeight: FontWeight.bold,
-                            color: isSelected
-                                ? Colors.amberAccent
-                                : (isUnlocked ? Colors.white : Colors.white38),
+                            color: isSelected ? Colors.black : (isUnlocked ? Colors.white : Colors.white38),
                           ),
                         ),
                         Text(
                           isUnlocked ? '${zone.stageCount} Ải' : 'Đang Khóa',
                           style: TextStyle(
                             fontSize: 10,
-                            color: isUnlocked ? Colors.greenAccent : Colors.redAccent,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.black87 : (isUnlocked ? AppTheme.greenAccent : AppTheme.redAccent),
                           ),
                         ),
                       ],
@@ -122,23 +133,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
-          // Zone Banner / Description
+          // 2. Selected Zone Description Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade900.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                gradient: AppTheme.surfaceGradient,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5)),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -155,17 +167,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'VÙNG ${_selectedZoneId}: ${selectedZone.name}',
-                          style: const TextStyle(
-                            fontSize: 14,
+                          'VÙNG $_selectedZoneId: ${selectedZone.name}',
+                          style: GoogleFonts.cinzel(
+                            fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: Colors.amberAccent,
+                            color: AppTheme.goldAccent,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           selectedZone.description,
-                          style: const TextStyle(fontSize: 11, color: Colors.white70),
+                          style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.3),
                         ),
                       ],
                     ),
@@ -175,81 +187,78 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
-          // Stage List
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'CHỌN ẢI KHIÊU CHIẾN',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white70),
-                ),
-                Text(
-                  'Đang chọn: Ải $_selectedStage',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.amberAccent),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
+          // 3. Winding Path / Stage Node Trail
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               itemCount: enemiesInZone.length,
               itemBuilder: (context, index) {
                 final enemy = enemiesInZone[index];
                 final stageNum = index + 1;
                 final isSelected = _selectedStage == stageNum;
+                final isBoss = enemy.isBoss;
+
+                final stageKey = 'z${_selectedZoneId}_s$stageNum';
+                final isCleared = player.clearedStages.contains(stageKey);
 
                 return InkWell(
+                  borderRadius: BorderRadius.circular(14),
                   onTap: () {
+                    HapticFeedback.lightImpact();
                     setState(() {
                       _selectedStage = stageNum;
                     });
                   },
                   child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.symmetric(vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.orange.shade900.withOpacity(0.35)
-                          : Colors.grey.shade900.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(10),
+                      gradient: isSelected
+                          ? AppTheme.goldButtonGradient
+                          : AppTheme.surfaceGradient,
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? Colors.orangeAccent : Colors.white12,
-                        width: isSelected ? 1.5 : 1,
+                        color: isSelected
+                            ? AppTheme.goldAccent
+                            : (isBoss ? AppTheme.goldAccent.withOpacity(0.5) : Colors.white12),
+                        width: isSelected ? 2 : 1,
                       ),
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: AppTheme.goldAccent.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                      ],
                     ),
                     child: Row(
                       children: [
-                        // Stage Number Badge
+                        // Circular Node Avatar
                         Container(
-                          width: 38,
-                          height: 38,
-                          alignment: Alignment.center,
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
-                            color: enemy.isBoss ? Colors.amber.shade900 : Colors.black45,
-                            borderRadius: BorderRadius.circular(8),
+                            shape: BoxShape.circle,
+                            color: isBoss ? AppTheme.redAccent.withOpacity(0.2) : Colors.black45,
                             border: Border.all(
-                              color: enemy.isBoss ? Colors.amberAccent : Colors.white24,
+                              color: isBoss ? AppTheme.goldAccent : Colors.white24,
+                              width: isBoss ? 2 : 1,
                             ),
                           ),
-                          child: Text(
-                            enemy.isBoss ? '👑' : '$stageNum',
-                            style: TextStyle(
-                              fontSize: enemy.isBoss ? 16 : 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                          child: ClipOval(
+                            child: AssetMapping.safeImage(
+                              enemy.imageAsset,
+                              fit: BoxFit.cover,
+                              fallbackEmoji: enemy.fallbackEmoji,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
 
-                        // Enemy info
+                        // Stage Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,40 +266,50 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               Row(
                                 children: [
                                   Text(
-                                    enemy.name,
-                                    style: TextStyle(
+                                    'Ải $stageNum: ${enemy.name}',
+                                    style: GoogleFonts.cinzel(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
-                                      color: enemy.isBoss ? Colors.amberAccent : Colors.white,
+                                      color: isSelected ? Colors.black : Colors.white,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  if (enemy.isBoss) ...[
+                                  if (isBoss) ...[
                                     const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.shade900,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text('BOSS', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
-                                    ),
+                                    const Text('👑', style: TextStyle(fontSize: 12)),
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
-                                'HP: ${enemy.maxHp}  •  ATK: ${enemy.atk}  •  Thưởng: ${enemy.expReward} EXP, ${enemy.goldReward}g',
-                                style: const TextStyle(fontSize: 11, color: Colors.white60),
+                                'Máu: ${enemy.maxHp}  •  Công: ${enemy.atk}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isSelected ? Colors.black87 : Colors.white60,
+                                ),
                               ),
                             ],
                           ),
                         ),
 
-                        // Selection radio indicator
-                        Icon(
-                          isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                          color: isSelected ? Colors.amberAccent : Colors.white30,
-                        ),
+                        // Cleared Status Icon
+                        if (isCleared)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.black26 : AppTheme.greenAccent.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '✓ ĐÃ QUA',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.black : AppTheme.greenAccent,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -299,18 +318,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
-          // Start Battle on Selected Stage Button
+          // 4. Bottom Launch Battle CTA Button
           Padding(
             padding: const EdgeInsets.all(16),
             child: SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 54,
               child: ElevatedButton(
                 onPressed: () {
-                  ref.read(playerProvider.notifier).selectZoneAndStage(_selectedZoneId, _selectedStage);
-                  Navigator.of(context).push(
+                  HapticFeedback.mediumImpact();
+                  Navigator.push(
+                    context,
                     MaterialPageRoute(
-                      builder: (_) => BattleScreen(
+                      builder: (ctx) => BattleScreen(
                         zoneId: _selectedZoneId,
                         stage: _selectedStage,
                       ),
@@ -318,20 +338,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber.shade700,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  backgroundColor: AppTheme.goldAccent,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 6,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.flash_on, color: Colors.black, size: 22),
+                    const Icon(Icons.sports_martial_arts, color: Colors.black, size: 22),
                     const SizedBox(width: 8),
                     Text(
-                      'BẮT ĐẦU CÀN QUÉT (VÙNG $_selectedZoneId - ẢI $_selectedStage)',
-                      style: const TextStyle(
-                        fontSize: 14,
+                      'XUẤT TRẬN (ẢI $_selectedZoneId-$_selectedStage)',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
                         color: Colors.black,
                       ),

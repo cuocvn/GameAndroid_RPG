@@ -36,6 +36,8 @@ class BattleState {
   final int earnedGold;
   final List<Equipment> droppedEquipment;
   final String? activeSkillCastName;
+  final double battleDuration;
+  final bool triggeredSpeedrunBonus;
 
   const BattleState({
     required this.heroHp,
@@ -53,6 +55,8 @@ class BattleState {
     this.earnedGold = 0,
     this.droppedEquipment = const [],
     this.activeSkillCastName,
+    this.battleDuration = 0.0,
+    this.triggeredSpeedrunBonus = false,
   });
 
   BattleState copyWith({

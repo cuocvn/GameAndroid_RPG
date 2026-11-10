@@ -324,6 +324,7 @@ class PlayerNotifier extends Notifier<Player> {
     required List<Equipment> drops,
     required int foughtZone,
     required int foughtStage,
+    bool triggeredSpeedrun = false,
   }) {
     int newExp = state.currentExp + exp;
     int newLevel = state.level;
@@ -435,6 +436,7 @@ class PlayerNotifier extends Notifier<Player> {
       inventory: newInventory,
       maxUnlockedZone: newMaxZone,
       clearedStages: clearedList,
+      nextStageDifficultyBonus: triggeredSpeedrun ? 0.15 : 0.0,
     );
 
     _save();

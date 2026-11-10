@@ -1,7 +1,11 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../providers/game_providers.dart';
+import '../theme/app_theme.dart';
 import 'battle_screen.dart';
 import 'build_screen.dart';
 import 'map_screen.dart';
@@ -14,13 +18,46 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with TickerProviderStateMixin {
+  late AnimationController _floatController;
+  late Animation<double> _floatAnimation;
+
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    // Floating hero animation
+    _floatController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+    _floatAnimation = Tween<double>(begin: -6.0, end: 6.0).animate(
+      CurvedAnimation(parent: _floatController, curve: Curves.easeInOutSine),
+    );
+
+    // Pulsing CTA button animation
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkFirstTimeTutorial();
     });
+  }
+
+  @override
+  void dispose() {
+    _floatController.dispose();
+    _pulseController.dispose();
+    super.dispose();
   }
 
   void _checkFirstTimeTutorial() {
@@ -30,28 +67,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF161520),
+          backgroundColor: AppTheme.bgSurface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Colors.amberAccent, width: 1.5),
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
           ),
-          title: const Row(
+          title: Row(
             children: [
-              Text('🧙‍♀️ ', style: TextStyle(fontSize: 22)),
-              Text('Chào Mừng Dũng Sĩ!', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text('🧙‍♀️ ', style: TextStyle(fontSize: 22)),
+              Text(
+                'Chào Mừng Dũng Sĩ!',
+                style: GoogleFonts.cinzel(
+                  color: AppTheme.goldAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
-          content: const Text(
-            'Chào mừng bạn đến với thế giới Tactical RPG!\n\nNhấn nút "CHIẾN ĐẤU" bên dưới để bước vào trận đánh đầu tiên của bạn!',
-            style: TextStyle(fontSize: 13, color: Colors.white70),
+          content: Text(
+            'Chào mừng bạn đến với thế giới Tactical RPG!\n\nNhấn nút "⚔️ CHIẾN ĐẤU" bên dưới để bước vào trận đánh đầu tiên của bạn!',
+            style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
           ),
           actions: [
             ElevatedButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 ref.read(playerProvider.notifier).markTutorialHomeSeen();
                 Navigator.pop(ctx);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
               child: const Text('Đã hiểu', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
@@ -69,29 +114,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isShopUnlocked = player.level >= 5;
     final isMapUnlocked = player.level >= 6;
 
-    // Milestone calculation
-    final clearedCount = player.clearedStages.length;
-    String milestoneText;
-    if (clearedCount < 5) {
-      milestoneText = '⭐ Còn ${5 - clearedCount} ải nữa mở khóa Kỹ Năng Chủ Động mới';
-    } else if (clearedCount < 10) {
-      milestoneText = '⭐ Còn ${10 - clearedCount} ải nữa mở khóa Kỹ Năng Bị Động mới';
-    } else if (clearedCount < 15) {
-      milestoneText = '⭐ Còn ${15 - clearedCount} ải nữa mở thêm Ô Kỹ Năng Thứ 5';
-    } else if (clearedCount < 20) {
-      milestoneText = '⭐ Còn ${20 - clearedCount} ải nữa mở khóa Tuyệt Kỹ Tối Thượng';
-    } else {
-      milestoneText = '👑 Đã hoàn thành toàn bộ mốc thử thách danh dự!';
-    }
+    final hasPendingPoints = player.statPoints > 0 || player.skillPoints > 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0E17),
+      backgroundColor: AppTheme.bgDark,
       body: Stack(
         children: [
-          // Background with dark gradient overlay
+          // Background artwork with subtle ambient vignette
           Positioned.fill(
             child: Opacity(
-              opacity: 0.25,
+              opacity: 0.22,
               child: AssetMapping.safeImage(
                 AssetMapping.bgHomeDefault,
                 fit: BoxFit.cover,
@@ -99,15 +131,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
+          // Gradient dark vignette overlays
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.4),
-                    const Color(0xFF0F0E17).withOpacity(0.95),
+                    Color(0xEE0D0B14),
+                    Color(0x770D0B14),
+                    Color(0xEE0D0B14),
                   ],
                 ),
               ),
@@ -117,142 +151,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           SafeArea(
             child: Column(
               children: [
-                // Top Header: Currencies, Shop & Level
+                // 1. TOP HEADER: Level, Hero Title, Currencies
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
-                      // Level Badge
+                      // Hero Avatar & Level pill
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.amber.shade800, Colors.amber.shade600],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
+                          gradient: AppTheme.surfaceGradient,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5), width: 1.2),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.amber.withOpacity(0.4),
+                              color: Colors.black.withOpacity(0.4),
                               blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: Text(
-                          'Lv. ${player.level}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.goldButtonGradient,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Lv.${player.level}',
+                                style: GoogleFonts.cinzel(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  player.name,
+                                  style: GoogleFonts.cinzel(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  player.title,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: AppTheme.goldAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
+                      ),
+
+                      const Spacer(),
+
+                      // Gold Currency Chip
+                      _buildCurrencyChip(
+                        icon: '🪙',
+                        amount: '${player.gold}',
+                        color: AppTheme.goldAccent,
                       ),
                       const SizedBox(width: 8),
 
-                      // Player Name
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              player.name,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              player.title,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.amberAccent.shade100,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Gems (Đá Quý)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.cyanAccent.withOpacity(0.7), width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('💎 ', style: TextStyle(fontSize: 12)),
-                            Text(
-                              '${player.gems}',
-                              style: const TextStyle(
-                                color: Colors.cyanAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-
-                      // Gold Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.amber, width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('🪙 ', style: TextStyle(fontSize: 12)),
-                            Text(
-                              '${player.gold}',
-                              style: const TextStyle(
-                                color: Colors.amberAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-
-                      // Shop Icon (Opens ShopScreen if level >= 5)
-                      InkWell(
-                        onTap: isShopUnlocked
-                            ? () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const ShopScreen()),
-                                );
-                              }
-                            : () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('🏪 Cửa Hàng mở khóa ở Cấp độ 5!'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: isShopUnlocked ? Colors.amber.shade900 : Colors.grey.shade900,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isShopUnlocked ? Colors.amberAccent : Colors.grey.shade700,
-                            ),
-                          ),
-                          child: Icon(
-                            isShopUnlocked ? Icons.storefront : Icons.lock,
-                            size: 18,
-                            color: isShopUnlocked ? Colors.amberAccent : Colors.white38,
-                          ),
-                        ),
+                      // Gem Currency Chip
+                      _buildCurrencyChip(
+                        icon: '💎',
+                        amount: '${player.gems}',
+                        color: AppTheme.blueAccent,
                       ),
                     ],
                   ),
@@ -261,315 +236,183 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // EXP Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      height: 5,
+                      color: Colors.white12,
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: expRatio,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF8B5CF6), AppTheme.purpleAccent],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 2. HERO SHOWCASE WITH FLOATING ANIMATION & PEDESTAL
+                Expanded(
+                  flex: 5,
+                  child: Center(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Magical glowing stone pedestal under hero
+                        Positioned(
+                          bottom: 15,
+                          child: Container(
+                            width: 170,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.rectangle,
+                              borderRadius: BorderRadius.all(Radius.elliptical(170, 24)),
+                              gradient: RadialGradient(
+                                colors: [
+                                  AppTheme.goldAccent.withOpacity(0.45),
+                                  AppTheme.purpleAccent.withOpacity(0.2),
+                                  Colors.transparent,
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.goldAccent.withOpacity(0.25),
+                                  blurRadius: 18,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Hero floating animation
+                        AnimatedBuilder(
+                          animation: _floatAnimation,
+                          builder: (context, child) {
+                            return Transform.translate(
+                              offset: Offset(0, _floatAnimation.value),
+                              child: child,
+                            );
+                          },
+                          child: Hero(
+                            tag: 'hero_portrait',
+                            child: Container(
+                              width: 190,
+                              height: 190,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppTheme.goldAccent.withOpacity(0.6),
+                                  width: 2.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.goldAccent.withOpacity(0.25),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: AssetMapping.safeImage(
+                                  player.portraitAsset,
+                                  width: 190,
+                                  height: 190,
+                                  fit: BoxFit.cover,
+                                  fallbackEmoji: '🧙‍♀️',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 3. 2x2 STAT SUMMARY CARDS
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Kinh nghiệm (EXP)',
-                            style: TextStyle(fontSize: 10.5, color: Colors.white70),
+                          Expanded(
+                            child: _buildStatCard(
+                              label: 'MÁU (HP)',
+                              value: '${player.maxHp}',
+                              icon: Icons.favorite,
+                              color: AppTheme.redAccent,
+                            ),
                           ),
-                          Text(
-                            '${player.currentExp} / $reqExp (${(expRatio * 100).toStringAsFixed(1)}%)',
-                            style: const TextStyle(fontSize: 10.5, color: Colors.amberAccent),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildStatCard(
+                              label: 'GIÁP (DEF)',
+                              value: '${player.physicalDef.toStringAsFixed(1)}',
+                              icon: Icons.shield,
+                              color: AppTheme.blueAccent,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 3),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: expRatio,
-                          backgroundColor: Colors.grey.shade900,
-                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
-                          minHeight: 5,
-                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              label: 'CÔNG PHÉP',
+                              value: '${player.magicAtk.round()}',
+                              icon: Icons.local_fire_department,
+                              color: Colors.orangeAccent,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildStatCard(
+                              label: 'BẠO KÍCH',
+                              value: '${(player.critRate * 100).round()}%',
+                              icon: Icons.flash_on,
+                              color: AppTheme.goldAccent,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
 
-                // Milestone Progress Banner
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                const SizedBox(height: 16),
+
+                // 4. PULSING "CHIẾN ĐẤU" CTA BUTTON
+                ScaleTransition(
+                  scale: _pulseAnimation,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.purple.shade900.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            milestoneText,
-                            style: const TextStyle(fontSize: 10.5, color: Colors.purpleAccent, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        Text(
-                          '${clearedCount}/20',
-                          style: const TextStyle(fontSize: 10, color: Colors.white70),
+                      gradient: AppTheme.goldButtonGradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.goldAccent.withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                // Hero Portrait Display Card
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.amber.withOpacity(0.5), width: 1.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.amber.withOpacity(0.15),
-                                blurRadius: 16,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(19),
-                            child: AssetMapping.safeImage(
-                              player.portraitAsset,
-                              fit: BoxFit.cover,
-                              fallbackEmoji: '🧙‍♀️',
-                            ),
-                          ),
-                        ),
-
-                        // Change Avatar Button
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: InkWell(
-                            onTap: () => _showAvatarPicker(context, ref),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black87,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.amberAccent, width: 1),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.style, size: 12, color: Colors.amberAccent),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Đổi Tướng',
-                                    style: TextStyle(
-                                      color: Colors.amberAccent,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Notification Badge if has unspent Stat / Skill points
-                        if (player.statPoints > 0 || player.skillPoints > 0)
-                          Positioned(
-                            top: 10,
-                            left: 10,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade900,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.redAccent, width: 1),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.upgrade, size: 12, color: Colors.white),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '+${player.statPoints + player.skillPoints} Điểm!',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                        // Streamlined Home Stats: Chỉ hiện Level, HP, ATK, DEF, MANA (Gọn gàng)
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                            decoration: BoxDecoration(
-                              borderRadius: const BorderRadius.only(
-                                bottomLeft: Radius.circular(19),
-                                bottomRight: Radius.circular(19),
-                              ),
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.95),
-                                  Colors.black.withOpacity(0.0),
-                                ],
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _quickStat('❤️ MÁU (HP)', '${player.maxHp}', Colors.greenAccent),
-                                _quickStat('⚔️ CÔNG (ATK)', '${player.magicAtk.round()}', Colors.orangeAccent),
-                                _quickStat('🛡️ GIÁP (DEF)', '${player.physicalDef.round()}', Colors.lightBlueAccent),
-                                _quickStat('💧 MANA', '${player.maxMana}', Colors.cyanAccent),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // Action Navigation Buttons
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      // Build Button (Directly opens Build Screen)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const BuildScreen()),
-                            );
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: (player.statPoints > 0 || player.skillPoints > 0)
-                                  ? Colors.redAccent
-                                  : Colors.amberAccent,
-                              width: 1.5,
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.handyman, color: Colors.amberAccent, size: 18),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'TÙY BIẾN BUILD',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              if (player.statPoints > 0 || player.skillPoints > 0) ...[
-                                const SizedBox(width: 4),
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '${player.statPoints + player.skillPoints}',
-                                    style: const TextStyle(fontSize: 9.5, color: Colors.white, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Map Button (Unlocks at Level 6)
-                      OutlinedButton(
-                        onPressed: isMapUnlocked
-                            ? () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const MapScreen()),
-                                );
-                              }
-                            : () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('🗺️ Bản Đồ mở khóa ở Cấp độ 6!'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: isMapUnlocked ? Colors.purpleAccent : Colors.grey.shade700,
-                            width: 1.5,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isMapUnlocked ? Icons.map : Icons.lock,
-                              color: isMapUnlocked ? Colors.purpleAccent : Colors.white38,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isMapUnlocked ? 'BẢN ĐỒ' : 'BẢN ĐỒ (Lv.6)',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                                color: isMapUnlocked ? Colors.white : Colors.white38,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Primary BATTLE BUTTON
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 52,
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.of(context).push(
+                        HapticFeedback.mediumImpact();
+                        Navigator.push(
+                          context,
                           MaterialPageRoute(
-                            builder: (_) => BattleScreen(
+                            builder: (ctx) => BattleScreen(
                               zoneId: player.currentZone,
                               stage: player.currentStage,
                             ),
@@ -578,42 +421,101 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
-                        padding: EdgeInsets.zero,
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        elevation: 6,
-                        shadowColor: Colors.red.withOpacity(0.5),
                       ),
-                      child: Ink(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFE53935), Color(0xFFFF8A65), Color(0xFFFFB74D)],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.sports_martial_arts, color: Colors.black, size: 24),
+                          const SizedBox(width: 10),
+                          Text(
+                            'CHIẾN ĐẤU (ẢI ${player.currentZone}-${player.currentStage})',
+                            style: GoogleFonts.cinzel(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.black,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('⚔️ ', style: TextStyle(fontSize: 20)),
-                              Text(
-                                'VÀO CHIẾN ĐẤU (VÙNG ${player.currentZone} - ẢI ${player.currentStage})',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.8,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+
+                const SizedBox(height: 14),
+
+                // 5. BOTTOM ACTION NAVIGATION (Shop, Map, Build)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.surfaceGradient,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // Shop Icon
+                      _buildBottomNavButton(
+                        icon: Icons.storefront,
+                        label: 'Cửa Hàng',
+                        isUnlocked: isShopUnlocked,
+                        unlockReqText: 'Mở khóa ở Lv.5',
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (ctx) => const ShopScreen()),
+                          );
+                        },
+                      ),
+
+                      // Map Icon
+                      _buildBottomNavButton(
+                        icon: Icons.map,
+                        label: 'Bản Đồ',
+                        isUnlocked: isMapUnlocked,
+                        unlockReqText: 'Mở khóa ở Lv.6',
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (ctx) => const MapScreen()),
+                          );
+                        },
+                      ),
+
+                      // Character / Build Icon (with pending point badge)
+                      _buildBottomNavButton(
+                        icon: Icons.tune,
+                        label: 'Nhân Vật',
+                        isUnlocked: true,
+                        hasBadge: hasPendingPoints,
+                        badgeCount: player.statPoints + player.skillPoints,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (ctx) => const BuildScreen()),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
               ],
             ),
           ),
@@ -622,120 +524,171 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _quickStat(String title, String value, Color color) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
+  Widget _buildCurrencyChip({
+    required String icon,
+    required String amount,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.4), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 13)),
+          const SizedBox(width: 5),
+          Text(
+            amount,
+            style: GoogleFonts.cinzel(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12.5,
+            ),
           ),
-        ),
-        Text(
-          title,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  void _showAvatarPicker(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF161520),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  Widget _buildStatCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        gradient: AppTheme.surfaceGradient,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.06), width: 1),
       ),
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          height: 400,
-          child: Column(
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Chọn Tướng / Ngoại Hình',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.amberAccent,
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: Colors.white54,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Chọn ảnh đại diện nhân vật từ bộ sưu tập có sẵn trong game',
-                style: TextStyle(fontSize: 12, color: Colors.white60),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.8,
-                  ),
-                  itemCount: AssetMapping.characterPortraits.length,
-                  itemBuilder: (context, index) {
-                    final key = AssetMapping.characterPortraits.keys.elementAt(index);
-                    final assetPath = AssetMapping.characterPortraits[key]!;
-                    final heroName = key[0].toUpperCase() + key.substring(1);
-
-                    return InkWell(
-                      onTap: () {
-                        ref.read(playerProvider.notifier).changePortrait(
-                              assetPath,
-                              title: '$heroName - Dũng Sĩ Hỏa Hệ',
-                            );
-                        Navigator.pop(ctx);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.amber.withOpacity(0.5)),
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-                                child: AssetMapping.safeImage(
-                                  assetPath,
-                                  fit: BoxFit.cover,
-                                  fallbackEmoji: '🧙‍♀️',
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(vertical: 2),
-                              color: Colors.black54,
-                              width: double.infinity,
-                              child: Text(
-                                heroName,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 10, color: Colors.white),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+              Text(
+                value,
+                style: GoogleFonts.cinzel(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNavButton({
+    required IconData icon,
+    required String label,
+    required bool isUnlocked,
+    String? unlockReqText,
+    bool hasBadge = false,
+    int badgeCount = 0,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: isUnlocked
+          ? onTap
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(unlockReqText ?? 'Chưa mở khóa!'),
+                  duration: const Duration(milliseconds: 1500),
+                ),
+              );
+            },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: isUnlocked
+                        ? AppTheme.goldAccent.withOpacity(0.12)
+                        : Colors.white.withOpacity(0.05),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isUnlocked
+                          ? AppTheme.goldAccent.withOpacity(0.4)
+                          : Colors.white12,
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    isUnlocked ? icon : Icons.lock,
+                    color: isUnlocked ? AppTheme.goldAccent : Colors.grey,
+                    size: 20,
+                  ),
+                ),
+                if (hasBadge && badgeCount > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppTheme.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        '$badgeCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: isUnlocked ? Colors.white : Colors.white38,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

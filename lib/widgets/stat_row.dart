@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_theme.dart';
 
 class StatRow extends StatelessWidget {
   final String label;
@@ -27,37 +30,49 @@ class StatRow extends StatelessWidget {
     final bonus = totalValue - baseValue;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey.shade900.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.4), width: 1),
+        gradient: AppTheme.surfaceGradient,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: canAllocate
+              ? AppTheme.goldAccent.withOpacity(0.4)
+              : Colors.white.withOpacity(0.08),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          // Stat Badge
+          // Stat Badge (e.g. STR, INT)
           Container(
-            width: 44,
-            height: 36,
+            width: 48,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: color, width: 1.5),
+              color: color.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withOpacity(0.8), width: 1.5),
             ),
             child: Text(
               label,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
+              style: GoogleFonts.cinzel(
+                fontWeight: FontWeight.w900,
                 fontSize: 14,
                 color: color,
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
 
-          // Name and description
+          // Name, Values and Description
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,7 +81,7 @@ class StatRow extends StatelessWidget {
                   children: [
                     Text(
                       fullName,
-                      style: const TextStyle(
+                      style: GoogleFonts.inter(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                         color: Colors.white,
@@ -75,58 +90,61 @@ class StatRow extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       '$baseValue',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.white,
+                      style: GoogleFonts.cinzel(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: AppTheme.goldAccent,
                       ),
                     ),
                     if (bonus > 0)
                       Text(
                         ' (+$bonus)',
-                        style: const TextStyle(
-                          fontSize: 13,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.greenAccent,
+                          color: AppTheme.greenAccent,
                         ),
                       ),
                   ],
                 ),
+                const SizedBox(height: 2),
                 Text(
                   description,
-                  style: TextStyle(
+                  style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: Colors.white.withOpacity(0.6),
+                    color: Colors.white54,
                   ),
                 ),
               ],
             ),
           ),
 
-          // Allocate Button (+)
+          // Allocate "+" button
           if (canAllocate)
             InkWell(
-              onTap: onAllocate,
               borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                onAllocate?.call();
+              },
               child: Container(
-                width: 34,
-                height: 34,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.6)],
-                  ),
+                  gradient: AppTheme.goldButtonGradient,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.5),
-                      blurRadius: 6,
+                      color: AppTheme.goldAccent.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.add,
-                  color: Colors.white,
-                  size: 20,
+                  color: Colors.black,
+                  size: 22,
                 ),
               ),
             ),

@@ -1,11 +1,15 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_equipment.dart';
 import '../models/equipment.dart';
+import '../models/player.dart';
 import '../models/stats.dart';
 import '../providers/game_providers.dart';
+import '../theme/app_theme.dart';
 
 class GemPack {
   final int count;
@@ -27,7 +31,8 @@ class ShopScreen extends ConsumerStatefulWidget {
   ConsumerState<ShopScreen> createState() => _ShopScreenState();
 }
 
-class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProviderStateMixin {
+class _ShopScreenState extends ConsumerState<ShopScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final Random _rng = Random();
 
@@ -101,103 +106,91 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
           rarity = EquipmentRarity.uncommon;
         }
       } else if (playerLevel >= 11) {
-        if (roll < 0.40) {
+        if (roll < 0.12) {
+          rarity = EquipmentRarity.epic;
+        } else if (roll < 0.40) {
           rarity = EquipmentRarity.rare;
-        } else if (roll < 0.80) {
+        } else if (roll < 0.75) {
           rarity = EquipmentRarity.uncommon;
         } else {
           rarity = EquipmentRarity.common;
         }
-      } else {
-        // Level 5 - 10: Chỉ Common / Uncommon
-        rarity = (roll < 0.50) ? EquipmentRarity.uncommon : EquipmentRarity.common;
+      } else if (playerLevel >= 5) {
+        if (roll < 0.25) {
+          rarity = EquipmentRarity.rare;
+        } else if (roll < 0.65) {
+          rarity = EquipmentRarity.uncommon;
+        } else {
+          rarity = EquipmentRarity.common;
+        }
       }
 
-      // Pick predefined matching slot & rarity if available
-      final matching = SeedEquipment.allPredefinedEquipment
-          .where((e) => e.slot == slot && e.rarity == rarity)
-          .toList();
-
-      if (matching.isNotEmpty && _rng.nextBool()) {
-        final base = matching[_rng.nextInt(matching.length)];
-        list.add(Equipment(
-          id: 'shop_${base.id}_${DateTime.now().microsecondsSinceEpoch}_$i',
-          name: base.name,
-          description: base.description,
-          slot: base.slot,
-          rarity: base.rarity,
-          flatAtk: base.flatAtk,
-          flatDef: base.flatDef,
-          flatHp: base.flatHp,
-          critRate: base.critRate,
-          fireDmgPercent: base.fireDmgPercent,
-          manaRegen: base.manaRegen,
-          bonusStats: base.bonusStats,
-          iconAsset: base.iconAsset,
-          emoji: base.emoji,
-          sellPrice: base.sellPrice,
-        ));
-      } else {
-        list.add(_generateProceduralItem(slot, rarity, playerLevel, i));
-      }
+      final item = _createRandomShopItem(slot, rarity, i, playerLevel);
+      list.add(item);
     }
     return list;
   }
 
-  Equipment _generateProceduralItem(
-      EquipmentSlot slot, EquipmentRarity rarity, int level, int index) {
-    final multiplier = 1.0 + (level * 0.08) + (rarity.index * 1.2);
-    String name = '';
-    String emoji = '🛡️';
-    int flatAtk = 0;
-    int flatDef = 0;
-    int flatHp = 0;
-    double fireDmg = 0.0;
-    double crit = 0.0;
-    Stats stats = const Stats(str: 0, int_: 0, vit: 0, agi: 0, luk: 0);
+  Equipment _createRandomShopItem(
+      EquipmentSlot slot, EquipmentRarity rarity, int index, int playerLevel) {
+    final matchingPredefined = SeedEquipment.allPredefinedEquipment
+        .where((e) => e.slot == slot && e.rarity == rarity)
+        .toList();
 
-    if (slot == EquipmentSlot.weapon) {
-      emoji = '⚔️';
-      name = '${rarity.label} Trượng Thép #$index';
-      flatAtk = (14 * multiplier).round();
-      crit = (0.02 * rarity.index).clamp(0.0, 0.15);
-      if (rarity.index >= 3) fireDmg = 0.10 + (rarity.index * 0.05);
-      stats = Stats(int_: (2 * multiplier).round(), luk: rarity.index);
-    } else if (slot == EquipmentSlot.armor) {
-      emoji = '🛡️';
-      name = '${rarity.label} Giáp Vệ Quốc #$index';
-      flatHp = (50 * multiplier).round();
-      flatDef = (5 * multiplier).round();
-      stats = Stats(vit: (2 * multiplier).round(), agi: 1);
-    } else {
-      emoji = '💍';
-      name = '${rarity.label} Nhẫn Bí Thuật #$index';
-      crit = (0.02 * rarity.index).clamp(0.0, 0.12);
-      if (rarity.index >= 2) fireDmg = 0.08 + (rarity.index * 0.04);
-      stats = Stats(int_: (2 * multiplier).round(), luk: (2 * rarity.index));
+    if (matchingPredefined.isNotEmpty) {
+      return matchingPredefined[_rng.nextInt(matchingPredefined.length)];
     }
 
-    final price = (35 * multiplier).round();
+    final id = 'shop_${slot.name}_${rarity.name}_$index';
+    int baseAtk = 0;
+    int baseDef = 0;
+    int baseHp = 0;
+    String name = '';
+    String emoji = '🗡️';
+
+    final mult = 1.0 + (rarity.index * 0.4);
+
+    switch (slot) {
+      case EquipmentSlot.weapon:
+        baseAtk = (12 * mult + (playerLevel * 1.5)).round();
+        emoji = '⚔️';
+        name = '${rarity.label} Trảm Kiếm';
+        break;
+      case EquipmentSlot.armor:
+        baseDef = (6 * mult + (playerLevel * 0.8)).round();
+        baseHp = (60 * mult + (playerLevel * 10)).round();
+        emoji = '🛡️';
+        name = '${rarity.label} Giáp Hộ Mệnh';
+        break;
+      case EquipmentSlot.accessory:
+        baseHp = (40 * mult).round();
+        emoji = '💍';
+        name = '${rarity.label} Linh Thạch Nhẫn';
+        break;
+    }
 
     return Equipment(
-      id: 'shop_gen_${DateTime.now().microsecondsSinceEpoch}_$index',
+      id: id,
       name: name,
-      description: 'Trang bị thương gia rèn bán tại khu chợ thị trấn.',
+      description: 'Trang bị bày bán tại Cửa Hàng thương hội.',
       slot: slot,
       rarity: rarity,
-      flatAtk: flatAtk,
-      flatDef: flatDef,
-      flatHp: flatHp,
-      critRate: crit,
-      fireDmgPercent: fireDmg,
-      bonusStats: stats,
+      flatAtk: baseAtk,
+      flatDef: baseDef,
+      flatHp: baseHp,
+      bonusStats: Stats(
+        str: slot == EquipmentSlot.weapon ? (2 * (rarity.index + 1)) : 0,
+        int_: slot == EquipmentSlot.accessory ? (2 * (rarity.index + 1)) : 0,
+        vit: slot == EquipmentSlot.armor ? (3 * (rarity.index + 1)) : 0,
+        agi: 1,
+        luk: 1,
+      ),
       emoji: emoji,
-      sellPrice: price,
+      sellPrice: (30 * mult * (1 + playerLevel * 0.05)).round(),
     );
   }
 
   int _calculateBuyPrice(Equipment item, int playerLevel) {
-    // Giá = base price * rarity multiplier * (1 + level * 0.05)
     double rarityFactor = 1.0 + (item.rarity.index * 0.8);
     double levelFactor = 1.0 + (playerLevel * 0.05);
     return max(40, (item.sellPrice * 2.2 * rarityFactor * levelFactor).round());
@@ -214,25 +207,24 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
     final player = ref.watch(playerProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0E17),
+      backgroundColor: AppTheme.bgDark,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF161520),
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('🏪 ', style: TextStyle(fontSize: 18)),
-            Text(
-              'CỬA HÀNG TRANG BỊ & NGUYÊN LIỆU',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-          ],
+        backgroundColor: AppTheme.bgDark,
+        elevation: 0,
+        title: Text(
+          '🏪 CỬA HÀNG TRANG BỊ & NGUYÊN LIỆU',
+          style: GoogleFonts.cinzel(
+            fontWeight: FontWeight.bold,
+            fontSize: 14.5,
+            color: AppTheme.goldAccent,
+          ),
         ),
         actions: [
-          // Refresh Button (Costs 50 gold)
           TextButton.icon(
             onPressed: () {
               if (player.gold >= 50) {
-                ref.read(playerProvider.notifier).buyGems(0, 50); // deduct 50 gold
+                HapticFeedback.mediumImpact();
+                ref.read(playerProvider.notifier).buyGems(0, 50);
                 _checkOrRefreshShop(force: true);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Đã làm mới Cửa Hàng (-50 🪙)!')),
@@ -243,22 +235,44 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
                 );
               }
             },
-            icon: const Icon(Icons.refresh, color: Colors.amberAccent, size: 18),
-            label: const Text('Làm mới (50🪙)', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
+            icon: const Icon(Icons.refresh, color: AppTheme.goldAccent, size: 16),
+            label: Text(
+              'Làm mới (50🪙)',
+              style: GoogleFonts.inter(color: AppTheme.goldAccent, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.amberAccent,
-          labelColor: Colors.amberAccent,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          tabs: const [
-            Tab(text: 'VŨ KHÍ ⚔️'),
-            Tab(text: 'GIÁP 🛡️'),
-            Tab(text: 'PHỤ KIỆN 💍'),
-            Tab(text: 'ĐÁ QUÝ 💎'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppTheme.bgSurface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                gradient: AppTheme.goldButtonGradient,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: Colors.black,
+              unselectedLabelColor: Colors.white70,
+              labelStyle: GoogleFonts.cinzel(
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+              ),
+              tabs: const [
+                Tab(text: 'VŨ KHÍ ⚔️'),
+                Tab(text: 'GIÁP 🛡️'),
+                Tab(text: 'PHỤ KIỆN 💍'),
+                Tab(text: 'ĐÁ QUÝ 💎'),
+              ],
+            ),
+          ),
         ),
       ),
       body: Column(
@@ -266,7 +280,10 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
           // Currency Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.black45,
+            decoration: BoxDecoration(
+              color: AppTheme.bgSurface,
+              border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -275,27 +292,27 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
                     const Text('🪙 ', style: TextStyle(fontSize: 14)),
                     Text(
                       '${player.gold} Vàng',
-                      style: const TextStyle(
-                        color: Colors.amberAccent,
+                      style: GoogleFonts.cinzel(
+                        color: AppTheme.goldAccent,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                     ),
                     const SizedBox(width: 16),
                     const Text('💎 ', style: TextStyle(fontSize: 14)),
                     Text(
                       '${player.gems} Đá Quý',
-                      style: const TextStyle(
-                        color: Colors.cyanAccent,
+                      style: GoogleFonts.cinzel(
+                        color: AppTheme.blueAccent,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                     ),
                   ],
                 ),
                 Text(
                   'Tự làm mới mỗi 30p',
-                  style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
+                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white38),
                 ),
               ],
             ),
@@ -317,26 +334,26 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildEquipmentGrid(List<Equipment> items, player) {
+  Widget _buildEquipmentGrid(List<Equipment> items, Player player) {
     if (items.isEmpty) {
       return const Center(child: Text('Đang làm mới hàng...'));
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 0.68,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.65,
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
         final buyPrice = _calculateBuyPrice(item, player.level);
         final canAfford = player.gold >= buyPrice;
+        final rarityColor = AppTheme.getRarityColor(item.rarity);
 
-        // Stat comparison with currently equipped in that slot
         Equipment? equippedInSlot;
         if (item.slot == EquipmentSlot.weapon) equippedInSlot = player.equippedWeapon;
         if (item.slot == EquipmentSlot.armor) equippedInSlot = player.equippedArmor;
@@ -352,132 +369,122 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
             statDiff = item.flatDef - equippedInSlot.flatDef;
             compareLabel = statDiff > 0 ? '▲ +$statDiff DEF' : (statDiff < 0 ? '▼ $statDiff DEF' : '= DEF');
           } else {
-            statDiff = (item.fireDmgPercent * 100 - equippedInSlot.fireDmgPercent * 100).round();
-            compareLabel = statDiff > 0 ? '▲ +$statDiff% Lửa' : (statDiff < 0 ? '▼ $statDiff% Lửa' : '=');
+            statDiff = item.flatHp - equippedInSlot.flatHp;
+            compareLabel = statDiff > 0 ? '▲ +$statDiff HP' : (statDiff < 0 ? '▼ $statDiff HP' : '= HP');
           }
         }
 
         return Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.grey.shade900.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: item.rarity.color.withOpacity(0.7), width: 1.5),
+            gradient: AppTheme.surfaceGradient,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: rarityColor.withOpacity(0.55), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: rarityColor.withOpacity(0.12),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon & Rarity Tag
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: item.rarity.color.withOpacity(0.5)),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(7),
-                      child: AssetMapping.safeImage(
-                        item.iconAsset,
-                        width: 44,
-                        height: 44,
-                        fallbackEmoji: item.emoji,
-                      ),
+              // Icon container with rarity glow
+              Center(
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F0C18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: rarityColor, width: 1.5),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: AssetMapping.safeImage(
+                      item.iconAsset,
+                      width: 58,
+                      height: 58,
+                      fallbackEmoji: item.emoji,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: item.rarity.color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      item.rarity.label,
-                      style: TextStyle(
-                        color: item.rarity.color,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
 
-              // Name
               Text(
                 item.name,
-                style: TextStyle(
+                style: GoogleFonts.inter(
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: item.rarity.color,
+                  fontSize: 12.5,
+                  color: Colors.white,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+
+              Text(
+                item.rarity.label,
+                style: TextStyle(color: rarityColor, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 4),
 
-              // Stats
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (item.flatAtk > 0)
-                      Text('⚔️ +${item.flatAtk} ATK', style: const TextStyle(fontSize: 10, color: Colors.orangeAccent)),
-                    if (item.flatDef > 0)
-                      Text('🛡️ +${item.flatDef} DEF', style: const TextStyle(fontSize: 10, color: Colors.lightBlueAccent)),
-                    if (item.flatHp > 0)
-                      Text('❤️ +${item.flatHp} HP', style: const TextStyle(fontSize: 10, color: Colors.greenAccent)),
-                    if (item.fireDmgPercent > 0)
-                      Text('🔥 +${(item.fireDmgPercent * 100).round()}% Lửa', style: const TextStyle(fontSize: 10, color: Colors.redAccent)),
-                    if (compareLabel.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        compareLabel,
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                          color: statDiff > 0 ? Colors.greenAccent : (statDiff < 0 ? Colors.redAccent : Colors.white60),
-                        ),
-                      ),
-                    ],
-                  ],
+              // Stat compare badge
+              if (compareLabel.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statDiff > 0
+                        ? AppTheme.greenAccent.withOpacity(0.15)
+                        : (statDiff < 0 ? AppTheme.redAccent.withOpacity(0.15) : Colors.white10),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    compareLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: statDiff > 0
+                          ? AppTheme.greenAccent
+                          : (statDiff < 0 ? AppTheme.redAccent : Colors.white70),
+                    ),
+                  ),
                 ),
-              ),
 
-              // Buy Button
+              const Spacer(),
+
+              // Buy CTA Button
               SizedBox(
                 width: double.infinity,
-                height: 32,
+                height: 34,
                 child: ElevatedButton(
                   onPressed: canAfford
                       ? () {
+                          HapticFeedback.lightImpact();
                           final success = ref.read(playerProvider.notifier).buyShopItem(item, buyPrice);
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Đã mua [${item.name}]! Đã chuyển vào Kho đồ.')),
+                              SnackBar(content: Text('⚡ Đã mua thành công [${item.name}]!')),
                             );
-                            setState(() {
-                              items.removeAt(index);
-                            });
                           }
                         }
                       : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: canAfford ? Colors.amber.shade700 : Colors.grey.shade800,
+                    backgroundColor: AppTheme.goldAccent,
+                    foregroundColor: Colors.black,
                     padding: EdgeInsets.zero,
                   ),
-                  child: Text(
-                    canAfford ? 'Mua ($buyPrice🪙)' : 'Thiếu ${buyPrice - player.gold}🪙',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      color: canAfford ? Colors.black : Colors.white38,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('🪙 ', style: TextStyle(fontSize: 11)),
+                      Text(
+                        '$buyPrice',
+                        style: GoogleFonts.cinzel(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -488,9 +495,9 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildGemsTab(player) {
+  Widget _buildGemsTab(Player player) {
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       itemCount: _gemPacks.length,
       itemBuilder: (context, index) {
         final pack = _gemPacks[index];
@@ -498,64 +505,69 @@ class _ShopScreenState extends ConsumerState<ShopScreen> with SingleTickerProvid
 
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.grey.shade900.withOpacity(0.8),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+            gradient: AppTheme.surfaceGradient,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.blueAccent.withOpacity(0.4), width: 1),
           ),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 50,
+                height: 50,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.cyan.shade900.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.cyanAccent),
+                  color: AppTheme.blueAccent.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.blueAccent.withOpacity(0.6)),
                 ),
                 child: const Text('💎', style: TextStyle(fontSize: 24)),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       pack.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.cyanAccent),
+                      style: GoogleFonts.cinzel(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       pack.description,
-                      style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.6)),
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
                     ),
                   ],
                 ),
               ),
+
               ElevatedButton(
                 onPressed: canAfford
                     ? () {
-                        final ok = ref.read(playerProvider.notifier).buyGems(pack.count, pack.price);
-                        if (ok) {
+                        HapticFeedback.lightImpact();
+                        final success = ref.read(playerProvider.notifier).buyGems(pack.count, pack.price);
+                        if (success) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Đã mua thành công +${pack.count} Đá Quý!')),
+                            SnackBar(content: Text('⚡ Đã mua thành công +${pack.count} Đá Quý!')),
                           );
                         }
                       }
                     : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: canAfford ? Colors.cyan.shade700 : Colors.grey.shade800,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  backgroundColor: AppTheme.goldAccent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: Size.zero,
                 ),
                 child: Text(
-                  canAfford ? '${pack.price} 🪙' : 'Thiếu Vàng',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: canAfford ? Colors.white : Colors.white38,
-                  ),
+                  '${pack.price} 🪙',
+                  style: GoogleFonts.cinzel(fontWeight: FontWeight.w900, fontSize: 12),
                 ),
               ),
             ],

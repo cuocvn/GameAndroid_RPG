@@ -60,6 +60,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
+  void _showSelectHeroSheet() {
+    final player = ref.read(playerProvider);
+    final heroList = [
+      {'id': 'cyra', 'name': 'Cyra', 'title': 'Hỏa Thuật Sư', 'asset': 'assets/img/characters/013_Cyra_MID.jpg'},
+      {'id': 'inari', 'name': 'Inari', 'title': 'Hồ Ly Pháp Sư', 'asset': 'assets/img/characters/001_Inari_MID.jpg'},
+      {'id': 'violetta', 'name': 'Violetta', 'title': 'Bóng Ma Rừng Sâu', 'asset': 'assets/img/characters/002_Violetta_JUNG.webp'},
+      {'id': 'valeria', 'name': 'Valeria', 'title': 'Sát Thủ Bóng Tối', 'asset': 'assets/img/characters/003_Valeria_JUNG.webp'},
+      {'id': 'kaelen', 'name': 'Kaelen', 'title': 'Thiết Huyết Chiến Binh', 'asset': 'assets/img/characters/004_Kaelen_TOP.jpg'},
+      {'id': 'carmilla', 'name': 'Carmilla', 'title': 'Huyết Ma Nữ Vương', 'asset': 'assets/img/characters/005_Carmilla_JUNG.jpg'},
+      {'id': 'elysia', 'name': 'Elysia', 'title': 'Thánh Nữ Ánh Sáng', 'asset': 'assets/img/characters/006_Elysia_SP.jpg'},
+      {'id': 'sylvia', 'name': 'Sylvia', 'title': 'Xạ Thủ Thần Tiễn', 'asset': 'assets/img/characters/007_Sylvia_AD.webp'},
+      {'id': 'selene', 'name': 'Selene', 'title': 'Nguyệt Quang Nữ Thần', 'asset': 'assets/img/characters/008_Selene_SP.webp'},
+      {'id': 'aurora', 'name': 'Aurora', 'title': 'Băng Tuyết Nữ Vương', 'asset': 'assets/img/characters/009_Aurora_TOP.jpg'},
+      {'id': 'lucia', 'name': 'Lucia', 'title': 'Thợ Săn Hắc Ám', 'asset': 'assets/img/characters/010_Lucia_JUNG.webp'},
+      {'id': 'marina', 'name': 'Marina', 'title': 'Hải Dương Hộ Vệ', 'asset': 'assets/img/characters/011_Marina_SP.jpg'},
+      {'id': 'seraphina', 'name': 'Seraphina', 'title': 'Chiến Tướng Thiên Giới', 'asset': 'assets/img/characters/012_Seraphina_JUNG.jpg'},
+      {'id': 'giselle', 'name': 'Giselle', 'title': 'Hỏa Pháo Xạ Thủ', 'asset': 'assets/img/characters/014_Giselle_AD.jpg'},
+      {'id': 'freya', 'name': 'Freya', 'title': 'Thần Nữ Valkyrie', 'asset': 'assets/img/characters/015_Freya_TOP.jpg'},
+      {'id': 'mai', 'name': 'Mai', 'title': 'Nữ Kiếm Tôn', 'asset': 'assets/img/characters/016_Mai_TOP.jpg'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.bgSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'CHỌN CHÂN DUNG DANH TƯỚNG',
+                    style: GoogleFonts.cinzel(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.goldAccent,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white60, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 0.78,
+                  ),
+                  itemCount: heroList.length,
+                  itemBuilder: (context, index) {
+                    final hero = heroList[index];
+                    final isSelected = player.portraitAsset == hero['asset'];
+
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        ref.read(playerProvider.notifier).changePortrait(
+                              hero['asset']!,
+                              name: hero['name']!,
+                              title: hero['title']!,
+                            );
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppTheme.goldAccent.withOpacity(0.2)
+                              : Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? AppTheme.goldAccent : Colors.white12,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: AssetMapping.safeImage(
+                                  hero['asset']!,
+                                  fit: BoxFit.cover,
+                                  fallbackEmoji: '🧙‍♀️',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              hero['name']!,
+                              style: GoogleFonts.cinzel(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? AppTheme.goldAccent : Colors.white,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _checkFirstTimeTutorial() {
     final player = ref.read(playerProvider);
     if (!player.hasSeenTutorialHome) {
@@ -156,60 +281,73 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
-                      // Hero Avatar & Level pill
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.surfaceGradient,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5), width: 1.2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                gradient: AppTheme.goldButtonGradient,
-                                borderRadius: BorderRadius.circular(12),
+                      // Hero Avatar & Level pill (Tap to change hero portrait)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _showSelectHeroSheet();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.surfaceGradient,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5), width: 1.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.4),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
-                              child: Text(
-                                'Lv.${player.level}',
-                                style: GoogleFonts.cinzel(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                  color: Colors.black,
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.goldButtonGradient,
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  player.name,
+                                child: Text(
+                                  'Lv.${player.level}',
                                   style: GoogleFonts.cinzel(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    color: Colors.black,
                                   ),
                                 ),
-                                Text(
-                                  player.title,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    color: AppTheme.goldAccent,
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        player.name,
+                                        style: GoogleFonts.cinzel(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.edit, size: 11, color: AppTheme.goldAccent),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  Text(
+                                    player.title,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      color: AppTheme.goldAccent,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
 
@@ -301,31 +439,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           },
                           child: Hero(
                             tag: 'hero_portrait',
-                            child: Container(
-                              width: 190,
-                              height: 190,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppTheme.goldAccent.withOpacity(0.6),
-                                  width: 2.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppTheme.goldAccent.withOpacity(0.25),
-                                    blurRadius: 20,
-                                    spreadRadius: 2,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(95),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                _showSelectHeroSheet();
+                              },
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: 190,
+                                    height: 190,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: AppTheme.goldAccent.withOpacity(0.6),
+                                        width: 2.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.goldAccent.withOpacity(0.25),
+                                          blurRadius: 20,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipOval(
+                                      child: AssetMapping.safeImage(
+                                        player.portraitAsset,
+                                        width: 190,
+                                        height: 190,
+                                        fit: BoxFit.cover,
+                                        fallbackEmoji: '🧙‍♀️',
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 8,
+                                    right: 18,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black87,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: AppTheme.goldAccent, width: 1),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.palette, size: 12, color: AppTheme.goldAccent),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Đổi Tướng',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ],
-                              ),
-                              child: ClipOval(
-                                child: AssetMapping.safeImage(
-                                  player.portraitAsset,
-                                  width: 190,
-                                  height: 190,
-                                  fit: BoxFit.cover,
-                                  fallbackEmoji: '🧙‍♀️',
-                                ),
                               ),
                             ),
                           ),

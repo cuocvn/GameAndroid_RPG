@@ -45,6 +45,16 @@ class PlayerNotifier extends Notifier<Player> {
     }
   }
 
+  /// Change character portrait / appearance and name
+  void changePortrait(String portraitAsset, {String? name, String? title}) {
+    state = state.copyWith(
+      portraitAsset: portraitAsset,
+      name: name ?? state.name,
+      title: title ?? state.title,
+    );
+    _save();
+  }
+
   /// Allocates 1 point into a chosen stat attribute
   void allocateStat(String statName) {
     if (state.statPoints <= 0) return;
@@ -448,15 +458,6 @@ class PlayerNotifier extends Notifier<Player> {
     state = state.copyWith(
       currentZone: zone,
       currentStage: stage,
-    );
-    _save();
-  }
-
-  /// Changes hero portrait / appearance
-  void changePortrait(String portraitAsset, {String? title}) {
-    state = state.copyWith(
-      portraitAsset: portraitAsset,
-      title: title ?? state.title,
     );
     _save();
   }

@@ -1,6 +1,6 @@
 # Tactical Idle RPG (Game AND) - Android Offline RPG
 
-Game nhập vai chiến thuật một nhân vật (**Single Character RPG + Idle Auto Battle + Character Builder**) viết bằng **Flutter + Dart**, hoạt động 100% offline, không cần internet.
+Game nhập vai chiến thuật một nhân vật (**Single Character RPG + Idle Auto Battle + Character Builder**) viết bằng **Flutter + Dart**, hoạt động 100% offline, không cần internet hay server.
 
 ---
 
@@ -17,30 +17,30 @@ game AND/
 ├── lib/
 │   ├── data/
 │   │   ├── asset_mapping.dart   (Map tài nguyên ảnh, safeImage fallback icon/emoji)
-│   │   ├── seed_enemies.dart    (5 vùng đất scale HP x1.8, ATK x1.55, Boss x6 HP, x2.2 ATK, +20% DEF)
+│   │   ├── seed_enemies.dart    (5 vùng đất scale HP x1.8, ATK x1.55, Boss x6 HP, x2.2 ATK, +20% DEF, Endless Tower)
 │   │   ├── seed_equipment.dart  (Kho trang bị cố định & khởi đầu theo 5 bậc Rarity)
 │   │   └── seed_skills.dart     (21 kỹ năng: 5 đánh thường, 8 chủ động, 8 bị động)
 │   ├── models/
 │   │   ├── stats.dart           (5 chỉ số STR, INT, VIT, AGI, LUK & công thức phái sinh)
-│   │   ├── skill.dart           (Kỹ năng, chi phí mana, hồi chiêu 15s, hồi máu 25%, tỉ lệ & hiệu ứng)
-│   │   ├── equipment.dart       (Trang bị 3 slot, cấp nâng cấp ⚡ +10%/cấp, 5 cấp Rarity)
+│   │   ├── skill.dart           (Kỹ năng, chi phí mana, hồi chiêu 15s, hồi máu 25%, tỷ lệ & hiệu ứng)
+│   │   ├── equipment.dart       (Trang bị 3 slot, cấp nâng cấp +10%/cấp, 5 cấp Rarity)
 │   │   ├── enemy.dart           (Kháng phép 40%, Phản đòn 20%, Hồi máu 5%/s, Diablo Cuồng Nộ)
-│   │   ├── player.dart          (Cap gear +150%, Cap Crit DMG 250%, Anti-trivialize +15%)
+│   │   ├── player.dart          (Cap gear +150%, Cap Crit DMG 250%, Anti-trivialize +15%, Tháp Vô Tận)
 │   │   └── battle_state.dart    (Trạng thái chiến đấu, banner chiêu thức, floating damage text)
 │   ├── providers/
-│   │   └── game_providers.dart  (Riverpod Notifier: nâng cấp đồ ⚡, mua shop, mốc ải, auto-save)
+│   │   └── game_providers.dart  (Riverpod Notifier: nâng cấp đồ, mua shop, mốc ải, auto-save, đổi chân dung)
 │   ├── services/
 │   │   ├── battle_service.dart  (Auto-battle engine: AI ưu tiên hồi máu, Diablo Cuồng Nộ, phản đòn)
-│   │   ├── loot_service.dart    (Tỉ lệ rơi đồ giảm 18%, Rare+ chỉ từ Boss Vùng 3+, cap LUK 50%)
+│   │   ├── loot_service.dart    (Tỷ lệ rơi đồ giảm 18%, Rare+ chỉ từ Boss Vùng 3+ hoặc Endless Tầng 10+)
 │   │   └── save_service.dart    (Lưu tiến trình offline tự động qua Hive + SharedPreferences)
 │   ├── theme/
 │   │   └── app_theme.dart       (Bảng màu Dark Fantasy #0D0B14, GoogleFonts Cinzel & Inter)
 │   ├── screens/
-│   │   ├── home_screen.dart     (Avatar bồng bềnh + bục ma pháp, 2x2 stats card, CTA nhịp đập)
+│   │   ├── home_screen.dart     (Avatar bồng bềnh + bệ ma pháp, 2x2 stats card, CTA nhịp đập, chọn 16 tướng)
 │   │   ├── build_screen.dart    (Pill tabs, 3 ô trang bị vuông phát sáng, kho đồ 4 cột, phân loại skill)
 │   │   ├── shop_screen.dart     (Cửa hàng 4 tab: Vũ khí, Giáp, Phụ kiện, Đá Quý 💎, so sánh ▲▼)
-│   │   ├── battle_screen.dart   (Sàn đấu 2 bục đá, breathing animation, HP nhấp nháy, log 📜 thu gọn)
-│   │   └── map_screen.dart      (Bản đồ ziczac 5 vùng đất, node ải đã qua/khóa/boss)
+│   │   ├── battle_screen.dart   (Sàn đấu 2 bệ đá, breathing animation, HP nhấp nháy, log 📜, popups tutorial)
+│   │   └── map_screen.dart      (Bản đồ 5 vùng đất + Chế độ Tháp Vô Tận Endless Tower)
 │   ├── widgets/
 │   │   ├── hp_bar.dart          (Thanh máu cảnh báo nhấp nháy đỏ khi HP < 30%, khiên & mana)
 │   │   ├── stat_row.dart        (Hiển thị chỉ số + nút cộng điểm tròn viền vàng phát sáng)
@@ -48,77 +48,59 @@ game AND/
 │   │   ├── skill_card.dart      (Thẻ kỹ năng, tag nguyên tố, nút Trang bị chiến đấu)
 │   │   └── damage_text_widget.dart (Chữ bay sát thương viền stroke đen chống chìm ảnh nền)
 │   └── main.dart                (Điểm khởi chạy ứng dụng, Dark Fantasy Theme RPG)
-├── test/
-│   ├── balance_test.dart        (Bộ kiểm thử cân bằng độ khó 5 kịch bản bắt buộc)
-│   └── widget_test.dart         (Bộ kiểm thử đơn vị cấu hình, công thức và nâng cấp đồ)
-└── pubspec.yaml                 (Khai báo google_fonts, flutter_riverpod, hive, path_provider)
+└── test/
+    ├── balance_test.dart        (5 test mô phỏng độ khó quái & cơ chế khắc chế bắt buộc)
+    └── widget_test.dart         (5 test chỉ số người chơi, kho kỹ năng, nâng cấp, Endless Tower)
 ```
 
 ---
 
-## 2. Hệ Thống Cân Bằng Độ Khó (Issue 1 Rebalance)
+## 2. Các Tính Năng Trọng Tâm
 
-1. **Công thức quái vật theo vùng**:
-   - Quái thường vùng $N$: $\text{HP}_N = \text{HP}_{N-1} \times 1.8$; $\text{ATK}_N = \text{ATK}_{N-1} \times 1.55$.
-   - Boss ải cuối: $\text{HP}_{\text{Boss}} = 6 \times \text{HP}_{\text{Quái thường}}$; $\text{ATK}_{\text{Boss}} = 2.2 \times \text{ATK}_{\text{Quái thường}}$; $+20\%$ DEF.
-   - Vùng 1 (Baseline): Quái thường lấy đi ít nhất 40% HP của người chơi nếu build kém; Boss 1 đánh bại người chơi chưa nâng cấp trang bị.
-2. **Cơ chế nội tại theo vùng**:
-   - **Vùng 3 — Kháng Phép 40%**: Sát thương từ kỹ năng phép thuật (INT-based) giảm 40%. Hiển thị huy hiệu `[🛡️ Kháng Phép]`.
-   - **Vùng 4 — Phản Đòn 20%**: Phản lại 20% sát thương nhận vào người chơi dưới dạng chữ đỏ `-X (phản đòn)`. Hiển thị huy hiệu `[⚡ Phản Đòn]`.
-   - **Vùng 5 — Hồi Máu 5%/giây**: Quái tự hồi 5% HP tối đa mỗi giây (`+X HP` màu xanh lá).
-   - **Boss Vùng 5 (Diablo)**: Khi HP $< 30\%$, kích hoạt **Cuồng Nộ** (+50% ATK, +30% tốc đánh, biểu ngữ `🔥 DIABLO NỔI GIẬN!`).
-3. **Kiểm soát sức mạnh người chơi**:
-   - Cap tổng % tăng chỉ số từ trang bị ở **+150%** chỉ số gốc (chống stack vô hạn).
-   - Cap **Sát thương Chí Mạng (Crit DMG)** ở mức tối đa **250%** (150% base + 100% bonus).
-   - Kỹ năng hồi máu (Thánh Quang Phục Hồi): Cooldown **15 giây**, hồi tối đa **25% Max HP**.
-   - **Anti-trivialize**: Nếu người chơi thắng ải quá nhanh ($< 8$ giây), độ khó ải tiếp theo tự động tăng $+15\%$.
-4. **Kiểm thử cân bằng tự động (`test/balance_test.dart`)**:
-   - ✅ Build full INT + Thiên Thạch **không thể qua Vùng 3** (do Kháng Phép 40%).
-   - ✅ Build full STR + Trảm Thép **không thể thắng Diablo Vùng 5** (do Hồi Máu 5%/s).
-   - ✅ Build full VIT (Tank) **phải thắng Boss Vùng 4 (Hades)** nhờ lượng máu và giáp chịu được phản đòn.
+### 2.1. Cân Bằng Độ Khó & Cơ Chế Khắc Chế Chiến Thuật
+- **Hệ số quái vật 5 Vùng**:
+  - Quái thường Vùng $N$: $\text{HP} = \text{HP}_{N-1} \times 1.8$, $\text{ATK} = \text{ATK}_{N-1} \times 1.55$.
+  - Boss ải: $\text{HP} = 6 \times \text{quái thường}$, $\text{ATK} = 2.2 \times \text{quái thường}$, $+20\%$ DEF.
+- **Nội tại đặc trưng từng vùng**:
+  - **Vùng 3 — Kháng Phép 40%**: Sát thương từ skill phép bị giảm 40% (khắc chế build thuần INT).
+  - **Vùng 4 — Phản Đòn 20%**: Phản lại 20% sát thương trúng phải về dũng sĩ (khắc chế build thủy tinh/dame to máu giấy, buff cho Tanker).
+  - **Vùng 5 — Hồi Máu 5%/giây**: Quái vật liên tục hồi máu (khắc chế build STR dồn dame chậm).
+  - **Boss Diablo (Cuồng Nộ)**: Dưới 30% HP kích hoạt Cuồng Nộ: $+50\%$ ATK, $+30\%$ tốc đánh, hiện banner `🔥 DIABLO NỔI GIẬN!`.
+- **Tháp Vô Tận (Endless Tower)**:
+  - Khiêu chiến không giới hạn các tầng tháp.
+  - Mỗi tầng scale $1.25\times$. Cứ mỗi 5 tầng có Thủ Vệ và 1 modifier đặc biệt.
+  - Trang bị bậc **Rare+** chỉ rơi từ Tầng 10 trở lên!
 
----
+### 2.2. Kiểm Soát Sức Mạnh Người Chơi
+- Chỉ số cộng thêm từ trang bị bị giới hạn ở mức tối đa **+150%** chỉ số cơ bản của nhân vật.
+- Sát thương chí mạng bị cap ở mức **250%**.
+- Kỹ năng *Thánh Quang Phục Hồi* có cooldown 15s và hồi tối đa 25% Max HP.
+- **Anti-Trivialize**: Nếu vượt ải dưới 8 giây, ải kế tiếp sẽ tự động tăng $+15\%$ độ khó.
 
-## 3. Redesign Giao Diện Dark Fantasy (Issue 2)
+### 2.3. Đổi Chân Dung Danh Tướng
+- Cho phép người chơi chạm vào ảnh đại diện tại màn hình chính để mở bảng chọn **16 danh tướng** (Cyra, Inari, Violetta, Valeria, Kaelen, Carmilla, Elysia, Sylvia, Selene, Aurora, Lucia, Marina, Seraphina, Giselle, Freya, Mai).
 
-- **Bảng màu & Theme (`lib/theme/app_theme.dart`)**:
-  - Background chính: `#0D0B14` (tím đen cực tối)
-  - Surface gradient: `#1A1626` $\rightarrow$ `#252036` (chéo $135^\circ$)
-  - Accent vàng gold: `#FFB547` (nút chính, viền phát sáng)
-  - Accent đỏ (`#E85D5D`), xanh lam (`#5DA9E8`), xanh lá (`#7FE85D`), tím (`#A85DE8`)
-  - 5 cấp độ hiếm (Rarity): Common (bạc), Uncommon (lục bảo), Rare (lam ngọc), Epic (tím ma thuật), Legendary (vàng kim hoàng gia).
-- **Typography**:
-  - Sử dụng `google_fonts`: **Cinzel** cho tiêu đề fantasy, tên Boss, số sát thương; **Inter** cho nội dung và thông số.
-- **HomeScreen**:
-  - Avatar nhân vật bồng bềnh lên xuống nhẹ nhàng trên bục ma pháp phát sáng.
-  - Thẻ tóm tắt 2x2 grid (Máu, Giáp, Công phép, Chí mạng) với icon màu riêng.
-  - Nút "⚔️ CHIẾN ĐẤU" kích thước lớn, hiệu ứng nhịp đập (pulse animation) phát sáng.
-  - Thanh công cụ đáy bo tròn gồm Shop, Bản Đồ, Nhân Vật (kèm badge thông báo điểm chưa cộng).
-- **BuildScreen**:
-  - Pill tabs chuyển đổi mượt mà.
-  - 3 ô trang bị hình vuông hiển thị trực quan (Vũ khí, Giáp, Phụ kiện) với viền màu Rarity glow.
-  - Tab kỹ năng phân loại 3 mục: Đánh thường, Chủ động, Bị động.
-- **BattleScreen**:
-  - Sàn đấu 2 bục đá ma pháp dưới chân Hero và Quái vật kèm hiệu ứng thở (breathing idle animation).
-  - Thanh HP đối xứng kèm avatar tròn nhỏ, **cảnh báo nhấp nháy đỏ khi HP < 30%**.
-  - Sát thương chữ bay (Floating Damage Text) có viền stroke đen bao quanh chống chìm ảnh nền.
-  - Banner kỹ năng xuất trận rực rỡ lướt qua màn hình trong 0.8s.
-  - Nhật ký chiến đấu thu gọn trong nút floating icon 📜 mở drawer tiện lợi.
-- **ShopScreen & MapScreen**:
-  - Cửa hàng 4 tab rõ ràng, thẻ so sánh chỉ số mũi tên xanh ▲ đỏ ▼.
-  - Bản đồ ziczac hiển thị dấu ✅ đã qua, 🔒 đang khóa và avatar Boss.
+### 2.4. Cửa Hàng Trang Bị & Đá Nâng Cấp
+- Mở khóa tại Level 5 với 4 phân loại tab: **Vũ khí ⚔️**, **Giáp 🛡️**, **Phụ kiện 💍**, **Đá quý 💎**.
+- Cho phép mua trang bị bằng Vàng và đổi Vàng lấy Đá Cường Hóa để nâng cấp trang bị lên tới +5 (+10% chỉ số mỗi cấp).
 
 ---
 
-## 4. Hướng Dẫn Chạy & Kiểm Thử
+## 3. Hướng Dẫn Chạy & Kiểm Thử
 
-### Chạy Unit Test & Balance Simulation
+### Chạy Unit & Balance Tests
 ```bash
 flutter test
 ```
-Tất cả 9 bài test (bao gồm 5 bài test cân bằng độ khó) đều vượt qua 100%.
+Tất cả 10/10 tests được đảm bảo 100% Pass:
+- Baseline Vùng 1 quái thường làm mất $\ge 40\%$ HP nếu build sai.
+- Boss Vùng 1 đánh bại người chơi chưa nâng cấp.
+- Pure INT thất bại ở Vùng 3 do Kháng Phép.
+- Pure STR thất bại ở Boss Diablo Vùng 5 do Hồi Máu 5%/s.
+- Pure VIT Tanker vượt qua Boss Vùng 4 Hades.
+- Endless Tower scaling & loot rules.
 
-### Chạy Ứng Dụng Trên Thiết Bị / Emulator
+### Chạy Ứng Dụng Trên Android Emulator hoặc Thiết Bị Thật
 ```bash
 flutter run
 ```

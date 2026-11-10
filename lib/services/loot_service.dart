@@ -32,10 +32,11 @@ class LootService {
     }
 
     // Determine rarity:
-    // Đồ Rare+ chỉ rơi từ boss ải 3 trở đi!
+    // Đồ Rare+ chỉ rơi từ boss ải 3 trở đi hoặc Endless tầng 10+!
     EquipmentRarity rarity = _determineRarity(
       isBoss: enemy.isBoss,
       zone: enemy.zone,
+      stage: enemy.stage,
       luk: player.totalStats.luk,
     );
 
@@ -52,11 +53,29 @@ class LootService {
   static EquipmentRarity _determineRarity({
     required bool isBoss,
     required int zone,
+    required int stage,
     required int luk,
   }) {
     double roll = _rng.nextDouble();
     double luckBonus = (luk * 0.002).clamp(0.0, 0.10);
     roll = (roll - luckBonus).clamp(0.0, 1.0);
+
+    // Endless Mode: Đồ Rare+ CHỈ rơi từ Endless tầng 10+!
+    if (zone == 99) {
+      if (stage < 10) {
+        return (roll < 0.40) ? EquipmentRarity.uncommon : EquipmentRarity.common;
+      } else if (stage < 20) {
+        if (roll < 0.35) return EquipmentRarity.rare;
+        return (roll < 0.70) ? EquipmentRarity.uncommon : EquipmentRarity.common;
+      } else if (stage < 30) {
+        if (roll < 0.25) return EquipmentRarity.epic;
+        if (roll < 0.65) return EquipmentRarity.rare;
+        return EquipmentRarity.uncommon;
+      } else {
+        if (roll < 0.40) return EquipmentRarity.legendary;
+        return EquipmentRarity.epic;
+      }
+    }
 
     if (isBoss) {
       // Boss ải 1 & 2: chỉ rơi Common hoặc Uncommon (thấp-trung bình)

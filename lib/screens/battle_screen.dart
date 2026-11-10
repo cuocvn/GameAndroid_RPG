@@ -19,11 +19,13 @@ import '../widgets/hp_bar.dart';
 class BattleScreen extends ConsumerStatefulWidget {
   final int zoneId;
   final int stage;
+  final bool isEndless;
 
   const BattleScreen({
     super.key,
     required this.zoneId,
     required this.stage,
+    this.isEndless = false,
   });
 
   @override
@@ -61,7 +63,11 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _dialogShown = false;
     _milestoneResult = null;
     final player = ref.read(playerProvider);
-    _enemy = SeedEnemies.getEnemy(widget.zoneId, widget.stage);
+    if (widget.isEndless || widget.zoneId == 99) {
+      _enemy = SeedEnemies.generateEndlessEnemy(widget.stage);
+    } else {
+      _enemy = SeedEnemies.getEnemy(widget.zoneId, widget.stage);
+    }
 
     _battleService = BattleService(
       player: player,
@@ -119,10 +125,19 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final state = _currentState;
-    final zone = SeedEnemies.zones.firstWhere(
-      (z) => z.id == widget.zoneId,
-      orElse: () => SeedEnemies.zones.first,
-    );
+    final zone = (widget.isEndless || widget.zoneId == 99)
+        ? const ZoneInfo(
+            id: 99,
+            name: 'Tháp Vô Tận',
+            description: 'Vực thẳm vô tận khiêu chiến cực hạn sức mạnh.',
+            iconEmoji: '🌀',
+            bgAsset: 'assets/img/characters/012_Seraphina_JUNG.jpg',
+            stageCount: 100,
+          )
+        : SeedEnemies.zones.firstWhere(
+            (z) => z.id == widget.zoneId,
+            orElse: () => SeedEnemies.zones.first,
+          );
 
     return Scaffold(
       backgroundColor: AppTheme.bgDark,

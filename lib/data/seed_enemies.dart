@@ -514,6 +514,9 @@ class SeedEnemies {
   }
 
   static Enemy getEnemy(int zoneId, int stage) {
+    if (zoneId == 99) {
+      return generateEndlessEnemy(stage);
+    }
     final list = getEnemiesForZone(zoneId);
     if (stage <= 0 || stage > list.length) {
       return list.first.clone();

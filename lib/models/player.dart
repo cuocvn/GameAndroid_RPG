@@ -42,6 +42,9 @@ class Player {
   // Anti-trivialize: Cleared under 8s buffs next stage difficulty by +15%
   final double nextStageDifficultyBonus;
 
+  // Endless Mode: Highest floor reached
+  final int highestEndlessFloor;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -76,6 +79,7 @@ class Player {
     this.hasSeenTutorialFirstWin = false,
     this.hasSeenTutorialFirstDrop = false,
     this.nextStageDifficultyBonus = 0.0,
+    this.highestEndlessFloor = 1,
   });
 
   /// Required EXP to level up
@@ -212,6 +216,7 @@ class Player {
     bool? hasSeenTutorialFirstWin,
     bool? hasSeenTutorialFirstDrop,
     double? nextStageDifficultyBonus,
+    int? highestEndlessFloor,
   }) {
     return Player(
       name: name ?? this.name,
@@ -240,6 +245,7 @@ class Player {
       hasSeenTutorialFirstWin: hasSeenTutorialFirstWin ?? this.hasSeenTutorialFirstWin,
       hasSeenTutorialFirstDrop: hasSeenTutorialFirstDrop ?? this.hasSeenTutorialFirstDrop,
       nextStageDifficultyBonus: nextStageDifficultyBonus ?? this.nextStageDifficultyBonus,
+      highestEndlessFloor: highestEndlessFloor ?? this.highestEndlessFloor,
     );
   }
 
@@ -269,6 +275,7 @@ class Player {
         'hasSeenTutorialHome': hasSeenTutorialHome,
         'hasSeenTutorialFirstWin': hasSeenTutorialFirstWin,
         'hasSeenTutorialFirstDrop': hasSeenTutorialFirstDrop,
+        'highestEndlessFloor': highestEndlessFloor,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -317,5 +324,6 @@ class Player {
         hasSeenTutorialHome: json['hasSeenTutorialHome'] as bool? ?? false,
         hasSeenTutorialFirstWin: json['hasSeenTutorialFirstWin'] as bool? ?? false,
         hasSeenTutorialFirstDrop: json['hasSeenTutorialFirstDrop'] as bool? ?? false,
+        highestEndlessFloor: json['highestEndlessFloor'] as int? ?? 1,
       );
 }

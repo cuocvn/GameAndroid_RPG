@@ -365,12 +365,26 @@ class PlayerNotifier extends Notifier<Player> {
 
     final newInventory = List<Equipment>.from(state.inventory)..addAll(drops);
 
-    // Map progression
+    // Map progression & Endless progression
     int newMaxZone = state.maxUnlockedZone;
-    final zoneStages = SeedEnemies.getEnemiesForZone(foughtZone);
-    if (foughtStage >= zoneStages.length) {
-      if (foughtZone < 5 && foughtZone >= state.maxUnlockedZone) {
-        newMaxZone = min(5, foughtZone + 1);
+    int newHighestEndless = state.highestEndlessFloor;
+
+    if (foughtZone == 99) {
+      if (foughtStage >= state.highestEndlessFloor) {
+        newHighestEndless = foughtStage + 1;
+      }
+      // Endless mode bonus gems
+      if (foughtStage % 5 == 0) {
+        gainedGems += 2;
+      } else {
+        gainedGems = max(1, gainedGems);
+      }
+    } else {
+      final zoneStages = SeedEnemies.getEnemiesForZone(foughtZone);
+      if (foughtStage >= zoneStages.length) {
+        if (foughtZone < 5 && foughtZone >= state.maxUnlockedZone) {
+          newMaxZone = min(5, foughtZone + 1);
+        }
       }
     }
 
@@ -447,6 +461,7 @@ class PlayerNotifier extends Notifier<Player> {
       maxUnlockedZone: newMaxZone,
       clearedStages: clearedList,
       nextStageDifficultyBonus: triggeredSpeedrun ? 0.15 : 0.0,
+      highestEndlessFloor: newHighestEndless,
     );
 
     _save();

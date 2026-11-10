@@ -63,4 +63,16 @@ void main() {
     expect(item.effectiveFlatAtk, 130);
     expect(item.maxUpgradeLevel, 5);
   });
+
+  test('Endless Tower generator and floor 10+ mechanics', () {
+    final floor1 = SeedEnemies.generateEndlessEnemy(1);
+    final floor5 = SeedEnemies.generateEndlessEnemy(5);
+    final floor10 = SeedEnemies.generateEndlessEnemy(10);
+
+    expect(floor5.isBoss, true);
+    expect(floor10.isBoss, true);
+    expect(floor10.maxHp, greaterThan(floor1.maxHp * 3));
+    expect(floor10.atk, greaterThan(floor1.atk));
+    expect(floor10.activeModifierBadges.isNotEmpty, true);
+  });
 }

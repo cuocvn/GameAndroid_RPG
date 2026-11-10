@@ -75,4 +75,19 @@ void main() {
     expect(floor10.atk, greaterThan(floor1.atk));
     expect(floor10.activeModifierBadges.isNotEmpty, true);
   });
+
+  test('Quests & Achievements tracking and rewards', () {
+    Player player = const Player(level: 5, gold: 50, gems: 3);
+    expect(player.claimedQuestIds.isEmpty, true);
+
+    player = player.copyWith(
+      claimedQuestIds: ['reach_lvl_5'],
+      gold: player.gold + 200,
+      gems: player.gems + 2,
+    );
+
+    expect(player.claimedQuestIds.contains('reach_lvl_5'), true);
+    expect(player.gold, 250);
+    expect(player.gems, 5);
+  });
 }

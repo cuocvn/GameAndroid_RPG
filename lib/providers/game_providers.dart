@@ -55,6 +55,19 @@ class PlayerNotifier extends Notifier<Player> {
     _save();
   }
 
+  /// Claim Quest / Achievement reward
+  bool claimQuest(String questId, {int goldReward = 0, int gemsReward = 0}) {
+    if (state.claimedQuestIds.contains(questId)) return false;
+    final updated = List<String>.from(state.claimedQuestIds)..add(questId);
+    state = state.copyWith(
+      claimedQuestIds: updated,
+      gold: state.gold + goldReward,
+      gems: state.gems + gemsReward,
+    );
+    _save();
+    return true;
+  }
+
   /// Allocates 1 point into a chosen stat attribute
   void allocateStat(String statName) {
     if (state.statPoints <= 0) return;

@@ -45,6 +45,9 @@ class Player {
   // Endless Mode: Highest floor reached
   final int highestEndlessFloor;
 
+  // Claimed Quests & Achievement IDs
+  final List<String> claimedQuestIds;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -80,6 +83,7 @@ class Player {
     this.hasSeenTutorialFirstDrop = false,
     this.nextStageDifficultyBonus = 0.0,
     this.highestEndlessFloor = 1,
+    this.claimedQuestIds = const [],
   });
 
   /// Required EXP to level up
@@ -217,6 +221,7 @@ class Player {
     bool? hasSeenTutorialFirstDrop,
     double? nextStageDifficultyBonus,
     int? highestEndlessFloor,
+    List<String>? claimedQuestIds,
   }) {
     return Player(
       name: name ?? this.name,
@@ -246,6 +251,7 @@ class Player {
       hasSeenTutorialFirstDrop: hasSeenTutorialFirstDrop ?? this.hasSeenTutorialFirstDrop,
       nextStageDifficultyBonus: nextStageDifficultyBonus ?? this.nextStageDifficultyBonus,
       highestEndlessFloor: highestEndlessFloor ?? this.highestEndlessFloor,
+      claimedQuestIds: claimedQuestIds ?? this.claimedQuestIds,
     );
   }
 
@@ -276,6 +282,7 @@ class Player {
         'hasSeenTutorialFirstWin': hasSeenTutorialFirstWin,
         'hasSeenTutorialFirstDrop': hasSeenTutorialFirstDrop,
         'highestEndlessFloor': highestEndlessFloor,
+        'claimedQuestIds': claimedQuestIds,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -325,5 +332,9 @@ class Player {
         hasSeenTutorialFirstWin: json['hasSeenTutorialFirstWin'] as bool? ?? false,
         hasSeenTutorialFirstDrop: json['hasSeenTutorialFirstDrop'] as bool? ?? false,
         highestEndlessFloor: json['highestEndlessFloor'] as int? ?? 1,
+        claimedQuestIds: (json['claimedQuestIds'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            [],
       );
 }

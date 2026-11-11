@@ -51,6 +51,12 @@ class Player {
   // Offline Idle AFK progress: timestamp of last claim (ms)
   final int lastAfkClaimTime;
 
+  // Prestige / Chuyển Sinh system
+  final int prestigeLevel;
+  final int enlightenmentPoints;
+  final int totalEnlightenmentEarned;
+  final Map<String, int> prestigeNodeLevels;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -88,6 +94,10 @@ class Player {
     this.highestEndlessFloor = 1,
     this.claimedQuestIds = const [],
     this.lastAfkClaimTime = 0,
+    this.prestigeLevel = 0,
+    this.enlightenmentPoints = 0,
+    this.totalEnlightenmentEarned = 0,
+    this.prestigeNodeLevels = const {},
   });
 
   /// Required EXP to level up
@@ -114,7 +124,20 @@ class Player {
       luk: gearBonus.luk.clamp(0, maxBonusLuk),
     );
 
-    return stats + clampedBonus;
+    final baseTotal = stats + clampedBonus;
+    final ancientLvl = prestigeNodeLevels['ancient_power'] ?? 0;
+    if (ancientLvl > 0) {
+      final mult = 1.0 + (ancientLvl * 0.05);
+      return Stats(
+        str: (baseTotal.str * mult).round(),
+        int_: (baseTotal.int_ * mult).round(),
+        vit: (baseTotal.vit * mult).round(),
+        agi: (baseTotal.agi * mult).round(),
+        luk: (baseTotal.luk * mult).round(),
+      );
+    }
+
+    return baseTotal;
   }
 
   // --- Derived combat numbers ---
@@ -122,7 +145,8 @@ class Player {
   int get maxHp {
     final base = totalStats.maxHp + (equippedArmor?.effectiveFlatHp ?? 0);
     final hpBonus = (skillLevels['vital_body'] ?? 0) * 0.10; // +10% per level
-    return (base * (1.0 + hpBonus)).round();
+    final tenacityBonus = (prestigeNodeLevels['tenacity_hp'] ?? 0) * 0.15; // +15% per level
+    return (base * (1.0 + hpBonus + tenacityBonus)).round();
   }
 
   double get physicalDef {
@@ -150,13 +174,16 @@ class Player {
   double get magicAtk =>
       (totalStats.int_ * 3.0) + (equippedWeapon?.effectiveFlatAtk ?? 0);
 
-  /// Crit Rate: LUK * 0.5% + Equipment + Passives (capped at 50%)
+  /// Crit Rate: LUK * 0.5% + Equipment + Passives + Set Bonus (capped at 50%)
   double get critRate {
     double rate = totalStats.critRate;
     if (equippedWeapon != null) rate += equippedWeapon!.critRate;
     if (equippedAccessory != null) rate += equippedAccessory!.critRate;
     final frenzyRank = skillLevels['frenzy'] ?? 0;
     rate += frenzyRank * 0.05; // +5% per rank
+    if (hasSetBonus2('loi_dinh')) {
+      rate += 0.10; // +10% Crit rate from Lôi Đình 2-piece set bonus
+    }
     return min(0.50, rate);
   }
 
@@ -170,8 +197,42 @@ class Player {
   /// Dodge chance: AGI * 0.3% (capped at 40%)
   double get dodgeRate => totalStats.dodgeRate;
 
-  /// Attack interval in seconds (AGI driven)
-  double get attackInterval => totalStats.attackInterval;
+  /// Attack interval in seconds (AGI driven + prestige speed)
+  double get attackInterval {
+    final base = totalStats.attackInterval;
+    final speedLvl = prestigeNodeLevels['swift_speed'] ?? 0;
+    if (speedLvl > 0) {
+      return max(0.4, base / (1.0 + speedLvl * 0.10));
+    }
+    return base;
+  }
+
+  /// Max active skill slots considering divine_aura prestige node
+  int get effectiveSkillSlots {
+    int slots = unlockedSkillSlots;
+    if ((prestigeNodeLevels['divine_aura'] ?? 0) > 0) {
+      slots = max(slots, 5) + 1;
+    }
+    return min(6, slots);
+  }
+
+  /// Active equipment set counts: setId -> count of equipped items (0 to 3)
+  Map<String, int> get activeSetCounts {
+    final counts = <String, int>{};
+    if (equippedWeapon?.setId != null) {
+      counts[equippedWeapon!.setId!] = (counts[equippedWeapon!.setId!] ?? 0) + 1;
+    }
+    if (equippedArmor?.setId != null) {
+      counts[equippedArmor!.setId!] = (counts[equippedArmor!.setId!] ?? 0) + 1;
+    }
+    if (equippedAccessory?.setId != null) {
+      counts[equippedAccessory!.setId!] = (counts[equippedAccessory!.setId!] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  bool hasSetBonus2(String setId) => (activeSetCounts[setId] ?? 0) >= 2;
+  bool hasSetBonus3(String setId) => (activeSetCounts[setId] ?? 0) >= 3;
 
   /// Total Fire Damage bonus percent (e.g. 0.45 = +45%)
   double get fireDamageBonusPercent {
@@ -181,6 +242,10 @@ class Player {
     final fireHeartRank = skillLevels['fire_heart'] ?? 0;
     if (fireHeartRank > 0) {
       bonus += 0.15 + (fireHeartRank - 1) * 0.05; // 15%, 20%, 25%...
+    }
+    // Set Viêm Long 2-piece bonus (+20% fire damage)
+    if (hasSetBonus2('viem_long')) {
+      bonus += 0.20;
     }
     return bonus;
   }
@@ -227,6 +292,10 @@ class Player {
     int? highestEndlessFloor,
     List<String>? claimedQuestIds,
     int? lastAfkClaimTime,
+    int? prestigeLevel,
+    int? enlightenmentPoints,
+    int? totalEnlightenmentEarned,
+    Map<String, int>? prestigeNodeLevels,
   }) {
     return Player(
       name: name ?? this.name,
@@ -258,6 +327,10 @@ class Player {
       highestEndlessFloor: highestEndlessFloor ?? this.highestEndlessFloor,
       claimedQuestIds: claimedQuestIds ?? this.claimedQuestIds,
       lastAfkClaimTime: lastAfkClaimTime ?? this.lastAfkClaimTime,
+      prestigeLevel: prestigeLevel ?? this.prestigeLevel,
+      enlightenmentPoints: enlightenmentPoints ?? this.enlightenmentPoints,
+      totalEnlightenmentEarned: totalEnlightenmentEarned ?? this.totalEnlightenmentEarned,
+      prestigeNodeLevels: prestigeNodeLevels ?? this.prestigeNodeLevels,
     );
   }
 
@@ -290,6 +363,10 @@ class Player {
         'highestEndlessFloor': highestEndlessFloor,
         'claimedQuestIds': claimedQuestIds,
         'lastAfkClaimTime': lastAfkClaimTime,
+        'prestigeLevel': prestigeLevel,
+        'enlightenmentPoints': enlightenmentPoints,
+        'totalEnlightenmentEarned': totalEnlightenmentEarned,
+        'prestigeNodeLevels': prestigeNodeLevels,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -344,5 +421,12 @@ class Player {
                 .toList() ??
             [],
         lastAfkClaimTime: json['lastAfkClaimTime'] as int? ?? 0,
+        prestigeLevel: json['prestigeLevel'] as int? ?? 0,
+        enlightenmentPoints: json['enlightenmentPoints'] as int? ?? 0,
+        totalEnlightenmentEarned: json['totalEnlightenmentEarned'] as int? ?? 0,
+        prestigeNodeLevels: (json['prestigeNodeLevels'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            const {},
       );
 }

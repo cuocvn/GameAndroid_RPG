@@ -4,6 +4,7 @@ import '../data/seed_enemies.dart';
 import '../data/seed_skills.dart';
 import '../models/equipment.dart';
 import '../models/player.dart';
+import '../models/prestige_node.dart';
 import '../models/skill.dart';
 import '../models/stats.dart';
 import '../services/save_service.dart';
@@ -462,7 +463,12 @@ class PlayerNotifier extends Notifier<Player> {
     required int foughtStage,
     bool triggeredSpeedrun = false,
   }) {
-    int newExp = state.currentExp + exp;
+    final expMultiplier = 1.0 + (state.prestigeNodeLevels['enlighten_exp'] ?? 0) * 0.10;
+    final goldMultiplier = 1.0 + (state.prestigeNodeLevels['enlighten_gold'] ?? 0) * 0.10;
+    final effectiveExp = (exp * expMultiplier).round();
+    final effectiveGold = (gold * goldMultiplier).round();
+
+    int newExp = state.currentExp + effectiveExp;
     int newLevel = state.level;
     int addedStatPoints = 0;
     int addedSkillPoints = 0;
@@ -579,7 +585,7 @@ class PlayerNotifier extends Notifier<Player> {
     state = state.copyWith(
       level: newLevel,
       currentExp: newExp,
-      gold: state.gold + gold,
+      gold: state.gold + effectiveGold,
       gems: state.gems + gainedGems,
       statPoints: state.statPoints + addedStatPoints,
       skillPoints: state.skillPoints + addedSkillPoints,
@@ -592,6 +598,119 @@ class PlayerNotifier extends Notifier<Player> {
 
     _save();
     return milestoneResult;
+  }
+
+  // --- Prestige / Chuyển Sinh System ---
+
+  /// Calculates enlightenment points gained if prestiging with given or current player state
+  int calculatePrestigePoints([Player? p]) {
+    final current = p ?? state;
+    final bossCount = current.clearedStages.where((s) => s.endsWith('_s5')).length;
+    final basePoints = (current.level ~/ 5) + (current.highestEndlessFloor ~/ 3) + (bossCount * 2);
+    final n = current.prestigeLevel + 1;
+    final multiplier = 1.0 + (n - 1) * 0.2;
+    return (basePoints * multiplier).floor();
+  }
+
+  /// Prestige unlocks when reaching Level >= 30 OR Endless Floor >= 15
+  bool get canPrestige => state.level >= 30 || state.highestEndlessFloor >= 15;
+
+  /// Perform Prestige / Chuyển Sinh
+  bool doPrestige() {
+    if (!canPrestige) return false;
+    final pointsGained = calculatePrestigePoints();
+    final newPrestigeLevel = state.prestigeLevel + 1;
+    final startingBonusStats = (state.prestigeNodeLevels['fresh_start'] ?? 0) * 5;
+    final hasAura = (state.prestigeNodeLevels['divine_aura'] ?? 0) > 0;
+
+    state = state.copyWith(
+      prestigeLevel: newPrestigeLevel,
+      enlightenmentPoints: state.enlightenmentPoints + pointsGained,
+      totalEnlightenmentEarned: state.totalEnlightenmentEarned + pointsGained,
+      level: 1,
+      currentExp: 0,
+      gold: 0,
+      gems: state.gems,
+      statPoints: 2 + startingBonusStats,
+      skillPoints: 1,
+      stats: const Stats(str: 5, int_: 10, vit: 8, agi: 6, luk: 5),
+      equippedWeapon: null,
+      clearWeapon: true,
+      equippedArmor: null,
+      clearArmor: true,
+      equippedAccessory: null,
+      clearAccessory: true,
+      inventory: const [],
+      skillLevels: const {
+        'fireball': 1,
+        'meteor': 1,
+        'fire_heart': 1,
+      },
+      equippedSkillIds: const [
+        'fireball',
+        'meteor',
+      ],
+      unlockedSkillSlots: hasAura ? 5 : 4,
+      maxUnlockedZone: 1,
+      currentZone: 1,
+      currentStage: 1,
+      clearedStages: const [],
+      nextStageDifficultyBonus: 0.0,
+    );
+    _save();
+    return true;
+  }
+
+  /// Upgrades a node in the Prestige Tree
+  bool upgradePrestigeNode(String nodeId) {
+    final node = PrestigeNodeData.getById(nodeId);
+    if (node == null) return false;
+    final currentLvl = state.prestigeNodeLevels[nodeId] ?? 0;
+    if (currentLvl >= node.maxLevel) return false;
+    if (state.enlightenmentPoints < node.costPerLevel) return false;
+
+    final updatedLevels = Map<String, int>.from(state.prestigeNodeLevels);
+    updatedLevels[nodeId] = currentLvl + 1;
+
+    int newSlots = state.unlockedSkillSlots;
+    if (nodeId == 'divine_aura') {
+      newSlots = min(6, state.unlockedSkillSlots + 1);
+    }
+    int extraStatPoints = state.statPoints;
+    if (nodeId == 'fresh_start') {
+      extraStatPoints += 5;
+    }
+
+    state = state.copyWith(
+      enlightenmentPoints: state.enlightenmentPoints - node.costPerLevel,
+      prestigeNodeLevels: updatedLevels,
+      unlockedSkillSlots: newSlots,
+      statPoints: extraStatPoints,
+    );
+    _save();
+    return true;
+  }
+
+  /// Resets the Prestige Tree for 5 Gems and refunds all spent points
+  bool resetPrestigeTree() {
+    if (state.gems < 5) return false;
+
+    int refundedPoints = 0;
+    for (final entry in state.prestigeNodeLevels.entries) {
+      final node = PrestigeNodeData.getById(entry.key);
+      if (node != null) {
+        refundedPoints += entry.value * node.costPerLevel;
+      }
+    }
+
+    state = state.copyWith(
+      gems: state.gems - 5,
+      enlightenmentPoints: state.enlightenmentPoints + refundedPoints,
+      prestigeNodeLevels: const {},
+      unlockedSkillSlots: min(5, state.unlockedSkillSlots),
+    );
+    _save();
+    return true;
   }
 
   /// Selects zone and stage to challenge

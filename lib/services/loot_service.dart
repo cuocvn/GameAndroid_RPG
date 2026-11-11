@@ -33,16 +33,19 @@ class LootService {
 
     // Determine rarity:
     // Đồ Rare+ chỉ rơi từ boss ải 3 trở đi hoặc Endless tầng 10+!
+    final fortuneBonus = (player.prestigeNodeLevels['fortune_luck'] ?? 0) * 0.05;
     EquipmentRarity rarity = _determineRarity(
       isBoss: enemy.isBoss,
       zone: enemy.zone,
       stage: enemy.stage,
       luk: player.totalStats.luk,
+      fortuneBonus: fortuneBonus,
     );
 
     Equipment item = _generateOrPickItem(
       rarity: rarity,
       zone: enemy.zone,
+      stage: enemy.stage,
       isBoss: enemy.isBoss,
     );
     drops.add(item);
@@ -55,9 +58,10 @@ class LootService {
     required int zone,
     required int stage,
     required int luk,
+    double fortuneBonus = 0.0,
   }) {
     double roll = _rng.nextDouble();
-    double luckBonus = (luk * 0.002).clamp(0.0, 0.10);
+    double luckBonus = (luk * 0.002 + fortuneBonus).clamp(0.0, 0.25);
     roll = (roll - luckBonus).clamp(0.0, 1.0);
 
     // Endless Mode: Đồ Rare+ CHỈ rơi từ Endless tầng 10+!
@@ -109,8 +113,49 @@ class LootService {
   static Equipment _generateOrPickItem({
     required EquipmentRarity rarity,
     required int zone,
+    required int stage,
     required bool isBoss,
   }) {
+    // Set pieces drop condition: Boss from Zone 2+ OR Endless even floors
+    String? targetSetId;
+    if (isBoss) {
+      if (zone == 2) targetSetId = 'viem_long';
+      if (zone == 3) targetSetId = 'han_bang';
+      if (zone == 4) targetSetId = 'loi_dinh';
+      if (zone == 5) targetSetId = 'huyet_ma';
+    } else if (zone == 99 && stage % 2 == 0) {
+      final sets = ['viem_long', 'han_bang', 'loi_dinh', 'huyet_ma'];
+      targetSetId = sets[_rng.nextInt(sets.length)];
+    }
+
+    if (targetSetId != null && _rng.nextDouble() < 0.50) {
+      final setPieces = SeedEquipment.allPredefinedEquipment
+          .where((e) => e.setId == targetSetId)
+          .toList();
+      if (setPieces.isNotEmpty) {
+        final picked = setPieces[_rng.nextInt(setPieces.length)];
+        return Equipment(
+          id: '${picked.id}_${DateTime.now().millisecondsSinceEpoch}_${_rng.nextInt(1000)}',
+          name: picked.name,
+          description: picked.description,
+          slot: picked.slot,
+          rarity: picked.rarity,
+          flatAtk: picked.flatAtk,
+          flatDef: picked.flatDef,
+          flatHp: picked.flatHp,
+          critRate: picked.critRate,
+          fireDmgPercent: picked.fireDmgPercent,
+          manaRegen: picked.manaRegen,
+          bonusStats: picked.bonusStats,
+          iconAsset: picked.iconAsset,
+          emoji: picked.emoji,
+          sellPrice: picked.sellPrice,
+          upgradeLevel: 0,
+          setId: picked.setId,
+        );
+      }
+    }
+
     // Check predefined
     final matchingPredefined = SeedEquipment.allPredefinedEquipment
         .where((e) => e.rarity == rarity)
@@ -134,6 +179,8 @@ class LootService {
         iconAsset: picked.iconAsset,
         emoji: picked.emoji,
         sellPrice: picked.sellPrice,
+        upgradeLevel: 0,
+        setId: picked.setId,
       );
     }
 

@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
+import '../data/seed_equipment.dart';
 import '../data/seed_skills.dart';
 import '../models/equipment.dart';
+import '../models/equipment_set.dart';
 import '../models/player.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
@@ -28,7 +30,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   void _confirmRespecStats() {
@@ -219,6 +221,9 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                     ],
                   ),
                 ),
+                const Tab(
+                  child: Text('BỘ SƯU TẬP'),
+                ),
               ],
             ),
           ),
@@ -234,6 +239,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
           isSkillUnlocked
               ? _buildSkillsTab(player)
               : _buildLockedTab('KỸ NĂNG', 4, 'Chiến đấu vượt ải để lên Cấp 4 và mở khóa Bảng Kỹ Năng & Lựa chọn Build'),
+          _buildSetCollectionTab(player),
         ],
       ),
     );
@@ -571,7 +577,12 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
           ],
         ),
 
-        const SizedBox(height: 18),
+        const SizedBox(height: 10),
+
+        // Active Set Bonus Banner with Progress Bar
+        _buildActiveSetBanner(player),
+
+        const SizedBox(height: 12),
 
         // Inventory Header & Quick Sell Button
         Row(
@@ -1164,6 +1175,446 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
           );
         }),
       ],
+    );
+  }
+
+  // --- Active Set Banner for Equipment Tab ---
+  Widget _buildActiveSetBanner(Player player) {
+    final activeSets = player.activeSetCounts;
+    final hasActiveSet = activeSets.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: player.hasSetBonus3('viem_long') ||
+                  player.hasSetBonus3('han_bang') ||
+                  player.hasSetBonus3('loi_dinh') ||
+                  player.hasSetBonus3('huyet_ma')
+              ? AppTheme.goldAccent
+              : (hasActiveSet ? Colors.purpleAccent.withOpacity(0.6) : Colors.white12),
+          width: 1.5,
+        ),
+        boxShadow: (player.hasSetBonus3('viem_long') ||
+                player.hasSetBonus3('han_bang') ||
+                player.hasSetBonus3('loi_dinh') ||
+                player.hasSetBonus3('huyet_ma'))
+            ? [
+                BoxShadow(
+                  color: AppTheme.goldAccent.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🔮', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              Text(
+                'HIỆU ỨNG BỘ TRANG BỊ (SET BONUS)',
+                style: GoogleFonts.cinzel(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!hasActiveSet) ...[
+            Text(
+              'Chưa kích hoạt Set nào. Hãy trang bị các món cùng bộ (Viêm Long, Hàn Băng, Lôi Đình, Huyết Ma) để kích hoạt hiệu ứng 2 món & 3 món!',
+              style: GoogleFonts.inter(fontSize: 11, color: Colors.white38, height: 1.3),
+            ),
+          ] else ...[
+            for (final entry in activeSets.entries) ...[
+              () {
+                final set = EquipmentSetData.getById(entry.key);
+                if (set == null) return const SizedBox.shrink();
+                final count = entry.value;
+                final isFull = count >= 3;
+                final isTwoPiece = count >= 2;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Text(set.icon, style: const TextStyle(fontSize: 14)),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Bộ ${set.name} [$count/3]',
+                              style: GoogleFonts.cinzel(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                                color: set.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (isFull)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.goldButtonGradient,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '🌟 FULL SET KÍCH HOẠT',
+                              style: GoogleFonts.cinzel(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: count / 3.0,
+                        backgroundColor: Colors.white12,
+                        valueColor: AlwaysStoppedAnimation<Color>(set.color),
+                        minHeight: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // 2-piece perk
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isTwoPiece ? '✅ ' : '🔒 ',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        Expanded(
+                          child: Text(
+                            '2 Món: ${set.twoPieceBonusDesc}',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: isTwoPiece ? Colors.white : Colors.white38,
+                              fontWeight: isTwoPiece ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // 3-piece perk
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isFull ? '🌟 ' : '🔒 ',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        Expanded(
+                          child: Text(
+                            '3 Món: ${set.threePieceBonusDesc}',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: isFull ? AppTheme.goldAccent : Colors.white38,
+                              fontWeight: isFull ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              }(),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  // --- TAB 4: BỘ SƯU TẬP (SET COLLECTION) ---
+  Widget _buildSetCollectionTab(Player player) {
+    bool isPieceOwned(String pieceId) {
+      final inWeapon = player.equippedWeapon != null && player.equippedWeapon!.id.contains(pieceId);
+      final inArmor = player.equippedArmor != null && player.equippedArmor!.id.contains(pieceId);
+      final inAcc = player.equippedAccessory != null && player.equippedAccessory!.id.contains(pieceId);
+      final inInv = player.inventory.any((e) => e.id.contains(pieceId));
+      return inWeapon || inArmor || inAcc || inInv;
+    }
+
+    int totalOwned = 0;
+    for (final s in EquipmentSetData.allSets) {
+      for (final p in s.pieceIds) {
+        if (isPieceOwned(p)) totalOwned++;
+      }
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Top Summary Header
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: AppTheme.surfaceGradient,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.goldAccent.withOpacity(0.4)),
+          ),
+          child: Row(
+            children: [
+              const Text('📜', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'BỘ SƯU TẬP TRANG BỊ BỘ',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.goldAccent,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tiến độ thu thập: $totalOwned/12 món đã mở khóa',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // List the 4 Sets
+        for (final set in EquipmentSetData.allSets) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.bgSurface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: set.color.withOpacity(0.4), width: 1.2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Text(set.icon, style: const TextStyle(fontSize: 18)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'BỘ ${set.name.toUpperCase()}',
+                          style: GoogleFonts.cinzel(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: set.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      set.theme,
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '• 2 Món: ${set.twoPieceBonusDesc}\n• 3 Món: ${set.threePieceBonusDesc}',
+                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white70, height: 1.35),
+                ),
+                const SizedBox(height: 12),
+
+                // 3 Pieces Cards
+                Row(
+                  children: [
+                    for (final pieceId in set.pieceIds) ...[
+                      () {
+                        final seedPiece = SeedEquipment.allPredefinedEquipment.firstWhere(
+                          (e) => e.id == pieceId,
+                          orElse: () => SeedEquipment.allPredefinedEquipment.first,
+                        );
+                        final owned = isPieceOwned(pieceId);
+
+                        return Expanded(
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              _showSetPieceDetailDialog(seedPiece, set, owned);
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                              decoration: BoxDecoration(
+                                color: owned
+                                    ? set.color.withOpacity(0.12)
+                                    : Colors.white.withOpacity(0.03),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: owned ? set.color : Colors.white12,
+                                  width: owned ? 1.5 : 0.8,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Opacity(
+                                    opacity: owned ? 1.0 : 0.4,
+                                    child: Text(
+                                      seedPiece.emoji,
+                                      style: const TextStyle(fontSize: 26),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    seedPiece.name,
+                                    style: GoogleFonts.cinzel(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: owned ? Colors.white : Colors.white38,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    owned ? '✓ ĐÃ CÓ' : '🔒 CHƯA CÓ',
+                                    style: GoogleFonts.cinzel(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: owned ? AppTheme.goldAccent : Colors.white30,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }(),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showSetPieceDetailDialog(Equipment item, EquipmentSet set, bool isOwned) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: set.color, width: 1.5),
+        ),
+        title: Row(
+          children: [
+            Text(item.emoji, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: GoogleFonts.cinzel(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    'Bộ ${set.name} • ${item.slot.label}',
+                    style: GoogleFonts.inter(fontSize: 11, color: set.color),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.description,
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('⚔️ Công: +${item.flatAtk}  •  🛡️ Giáp: +${item.flatDef}  •  ❤️ Máu: +${item.flatHp}',
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white)),
+                  if (item.fireDmgPercent > 0)
+                    Text('🔥 +${(item.fireDmgPercent * 100).round()}% Sát thương Lửa',
+                        style: GoogleFonts.inter(fontSize: 11, color: Colors.orangeAccent)),
+                  if (item.critRate > 0)
+                    Text('⚡ +${(item.critRate * 100).round()}% Bạo Kích',
+                        style: GoogleFonts.inter(fontSize: 11, color: AppTheme.goldAccent)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '📍 NƠI TÌM KIẾM:',
+              style: GoogleFonts.cinzel(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+            ),
+            const SizedBox(height: 4),
+            Text('• ${set.dropSource}', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+            Text('• ${set.shopUnlockDesc}', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+            const SizedBox(height: 8),
+            Text(
+              isOwned ? '🎉 Bạn ĐÃ SỞ HỮU món này trong trang bị hoặc kho đồ!' : '🔒 Chưa thu thập được.',
+              style: GoogleFonts.inter(
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+                color: isOwned ? AppTheme.greenAccent : Colors.white38,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.goldAccent,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('ĐÓNG', style: GoogleFonts.cinzel(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 }

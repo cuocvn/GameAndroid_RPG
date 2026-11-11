@@ -151,10 +151,29 @@ class SeedEnemies {
             imageAsset: AssetMapping.monsterZone1,
             fallbackEmoji: '👹',
             specialSkill: const EnemySkill(
-              name: 'Gầm Thét Cuồng Nộ',
-              damageMultiplier: 1.6,
+              name: 'Cắn Xé',
+              damageMultiplier: 1.5,
               cooldown: 4,
             ),
+            bossSkills: const [
+              EnemySkill(
+                id: 'bv1_s1',
+                name: 'Cắn Xé',
+                damageMultiplier: 1.5,
+                cooldown: 8.0,
+                icon: '🦷',
+                description: 'Cắn xé dữ dội gây 150% ATK',
+              ),
+              EnemySkill(
+                id: 'bv1_s2',
+                name: 'Gầm Thét',
+                damageMultiplier: 0.0,
+                cooldown: 15.0,
+                icon: '🦁',
+                causesHeroDefDown: true,
+                description: 'Gầm thét làm giảm 20% DEF của người chơi trong 5s',
+              ),
+            ],
           ),
         ];
 
@@ -239,10 +258,30 @@ class SeedEnemies {
             imageAsset: AssetMapping.monsterZone2,
             fallbackEmoji: '🔥',
             specialSkill: const EnemySkill(
-              name: 'Đại Hỏa Bạo',
-              damageMultiplier: 1.7,
+              name: 'Cầu Lửa',
+              damageMultiplier: 1.8,
               cooldown: 4,
             ),
+            bossSkills: const [
+              EnemySkill(
+                id: 'bv2_s1',
+                name: 'Cầu Lửa',
+                damageMultiplier: 1.8,
+                cooldown: 8.0,
+                isMagic: true,
+                icon: '🔥',
+                description: 'Bắn cầu lửa ma thuật gây 180% ATK phép',
+              ),
+              EnemySkill(
+                id: 'bv2_s2',
+                name: 'Thiêu Rụi',
+                damageMultiplier: 0.0,
+                cooldown: 15.0,
+                causesHeroBurn: true,
+                icon: '🌋',
+                description: 'Thiêu rụi đối thủ, gây sát thương liên tục trong 5s (10% Max HP/s)',
+              ),
+            ],
           ),
         ];
 
@@ -326,10 +365,30 @@ class SeedEnemies {
             imageAsset: AssetMapping.monsterZone3,
             fallbackEmoji: '❄️',
             specialSkill: const EnemySkill(
-              name: 'Đóng Băng Vĩnh Cửu',
-              damageMultiplier: 1.8,
+              name: 'Băng Phong',
+              damageMultiplier: 2.0,
               cooldown: 4,
             ),
+            bossSkills: const [
+              EnemySkill(
+                id: 'bv3_s1',
+                name: 'Băng Phong',
+                damageMultiplier: 2.0,
+                cooldown: 8.0,
+                isMagic: true,
+                icon: '❄️',
+                description: 'Cơn bão băng phong giá buốt gây 200% ATK phép',
+              ),
+              EnemySkill(
+                id: 'bv3_s2',
+                name: 'Đóng Băng',
+                damageMultiplier: 0.0,
+                cooldown: 15.0,
+                causesHeroFreeze: true,
+                icon: '🧊',
+                description: 'Đóng băng mục tiêu khiến người chơi không thể đánh trong 2s',
+              ),
+            ],
           ),
         ];
 
@@ -416,9 +475,28 @@ class SeedEnemies {
             fallbackEmoji: '☠️',
             specialSkill: const EnemySkill(
               name: 'Lưỡi Hái Tử Thần',
-              damageMultiplier: 1.5,
+              damageMultiplier: 2.2,
               cooldown: 4,
             ),
+            bossSkills: const [
+              EnemySkill(
+                id: 'bv4_s1',
+                name: 'Lưỡi Hái Tử Thần',
+                damageMultiplier: 2.2,
+                cooldown: 8.0,
+                icon: '💀',
+                description: 'Lưỡi hái vung chém linh hồn gây 220% ATK',
+              ),
+              EnemySkill(
+                id: 'bv4_s2',
+                name: 'Triệu Hồi Oán Linh',
+                damageMultiplier: 0.0,
+                cooldown: 15.0,
+                healsBossPercent: true,
+                icon: '👻',
+                description: 'Triệu hồi oán linh từ minh giới hồi phục 15% HP cho Boss',
+              ),
+            ],
           ),
         ];
 
@@ -504,10 +582,28 @@ class SeedEnemies {
             imageAsset: AssetMapping.monsterZone5,
             fallbackEmoji: '👑',
             specialSkill: const EnemySkill(
-              name: 'Hủy Diệt Thế Giới',
-              damageMultiplier: 2.2,
+              name: 'Hủy Diệt',
+              damageMultiplier: 2.5,
               cooldown: 4,
             ),
+            bossSkills: const [
+              EnemySkill(
+                id: 'bv5_s1',
+                name: 'Hủy Diệt',
+                damageMultiplier: 2.5,
+                cooldown: 8.0,
+                icon: '💥',
+                description: 'Đòn đánh hủy diệt gây 250% ATK',
+              ),
+              EnemySkill(
+                id: 'bv5_s2',
+                name: 'Đòn Tối Thượng',
+                damageMultiplier: 4.0,
+                cooldown: 20.0,
+                icon: '👑',
+                description: 'Tuyệt kỹ tối thượng của Chúa Tể Ma Giới gây 400% ATK!',
+              ),
+            ],
           ),
         ];
     }

@@ -92,8 +92,10 @@ class _ShopScreenState extends ConsumerState<ShopScreen>
   }
 
   List<Equipment> _generateCategoryItems(EquipmentSlot slot, int playerLevel) {
+    final player = ref.read(playerProvider);
+    final extraSlots = player.prestigeNodeLevels['treasure_slot'] ?? 0;
     List<Equipment> list = [];
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 6 + extraSlots; i++) {
       EquipmentRarity rarity = EquipmentRarity.common;
       double roll = _rng.nextDouble();
 
@@ -125,6 +127,18 @@ class _ShopScreenState extends ConsumerState<ShopScreen>
         }
       }
 
+      // Chance to feature a Set piece for Lv 10+ (Price 3x normal)
+      if (playerLevel >= 10 && _rng.nextDouble() < 0.20) {
+        final setPieces = SeedEquipment.allPredefinedEquipment
+            .where((e) => e.slot == slot && e.setId != null)
+            .toList();
+        if (setPieces.isNotEmpty) {
+          final chosenSet = setPieces[_rng.nextInt(setPieces.length)];
+          list.add(chosenSet.copyWith(upgradeLevel: 0));
+          continue;
+        }
+      }
+
       final item = _createRandomShopItem(slot, rarity, i, playerLevel);
       list.add(item);
     }
@@ -134,7 +148,7 @@ class _ShopScreenState extends ConsumerState<ShopScreen>
   Equipment _createRandomShopItem(
       EquipmentSlot slot, EquipmentRarity rarity, int index, int playerLevel) {
     final matchingPredefined = SeedEquipment.allPredefinedEquipment
-        .where((e) => e.slot == slot && e.rarity == rarity)
+        .where((e) => e.slot == slot && e.rarity == rarity && e.setId == null)
         .toList();
 
     if (matchingPredefined.isNotEmpty) {
@@ -193,7 +207,12 @@ class _ShopScreenState extends ConsumerState<ShopScreen>
   int _calculateBuyPrice(Equipment item, int playerLevel) {
     double rarityFactor = 1.0 + (item.rarity.index * 0.8);
     double levelFactor = 1.0 + (playerLevel * 0.05);
-    return max(40, (item.sellPrice * 2.2 * rarityFactor * levelFactor).round());
+    final basePrice = max(40, (item.sellPrice * 2.2 * rarityFactor * levelFactor).round());
+    // Set pieces cost 3x normal equipment
+    if (item.setId != null) {
+      return basePrice * 3;
+    }
+    return basePrice;
   }
 
   @override

@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import 'battle_screen.dart';
 import 'build_screen.dart';
 import 'map_screen.dart';
+import 'prestige_screen.dart';
 import 'shop_screen.dart';
 
 class QuestItem {
@@ -810,6 +811,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final isShopUnlocked = player.level >= 5;
     final isMapUnlocked = player.level >= 6;
+    final isPrestigeUnlocked = player.level >= 30 || player.highestEndlessFloor >= 15 || player.prestigeLevel > 0;
+    final canPrestigeNow = player.level >= 30 || player.highestEndlessFloor >= 15;
 
     final hasPendingPoints = player.statPoints > 0 || player.skillPoints > 0;
 
@@ -891,6 +894,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   ),
                                 ),
                               ),
+                              if (player.prestigeLevel > 0) ...[
+                                const SizedBox(width: 4),
+                                Tooltip(
+                                  message: 'Chuyển sinh lần ${player.prestigeLevel + 1} — nhận ${ref.read(playerProvider.notifier).calculatePrestigePoints()} điểm Ngộ Đạo nếu chuyển bây giờ',
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.purple.shade900,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.purpleAccent, width: 1),
+                                    ),
+                                    child: Text(
+                                      '🌟 Cấp ${player.prestigeLevel}',
+                                      style: GoogleFonts.cinzel(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 9.5,
+                                        color: AppTheme.goldAccent,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                               const SizedBox(width: 8),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -925,12 +950,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                       const Spacer(),
 
-                      // Gold Currency Chip
-                      _buildCurrencyChip(
-                        icon: '🪙',
-                        amount: '${player.gold}',
-                        color: AppTheme.goldAccent,
-                      ),
+                      // Currency Chip: Ngộ Đạo if prestigeLevel > 0, otherwise Gold
+                      if (player.prestigeLevel > 0)
+                        _buildCurrencyChip(
+                          icon: '🔮',
+                          amount: '${player.enlightenmentPoints}',
+                          color: Colors.purpleAccent,
+                        )
+                      else
+                        _buildCurrencyChip(
+                          icon: '🪙',
+                          amount: '${player.gold}',
+                          color: AppTheme.goldAccent,
+                        ),
                       const SizedBox(width: 8),
 
                       // Gem Currency Chip
@@ -1273,6 +1305,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                 const SizedBox(height: 12),
 
+                if (canPrestigeNow) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (ctx) => const PrestigeScreen()),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.purple, Colors.deepPurpleAccent],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.goldAccent, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.purple.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('🌟', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'ĐỦ ĐIỀU KIỆN CHUYỂN SINH! (+${ref.read(playerProvider.notifier).calculatePrestigePoints()} 🔮)',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.arrow_forward_ios, size: 12, color: AppTheme.goldAccent),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
                 // 4. PULSING "CHIẾN ĐẤU" CTA BUTTON
                 ScaleTransition(
                   scale: _pulseAnimation,
@@ -1393,6 +1476,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (ctx) => const BuildScreen()),
+                          );
+                        },
+                      ),
+
+                      // Prestige / Chuyển Sinh Icon
+                      _buildBottomNavButton(
+                        icon: Icons.auto_awesome,
+                        label: 'Chuyển Sinh',
+                        isUnlocked: isPrestigeUnlocked,
+                        unlockReqText: 'Mở Lv.30/F15',
+                        hasBadge: canPrestigeNow,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (ctx) => const PrestigeScreen()),
                           );
                         },
                       ),

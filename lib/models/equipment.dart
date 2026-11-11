@@ -77,6 +77,7 @@ class Equipment {
   final String emoji;
   final int sellPrice;
   final int upgradeLevel; // 0 to maxUpgradeLevel
+  final String? setId; // Set bonus ID (viem_long, han_bang, loi_dinh, huyet_ma)
 
   const Equipment({
     required this.id,
@@ -95,6 +96,7 @@ class Equipment {
     this.emoji = '🛡️',
     this.sellPrice = 50,
     this.upgradeLevel = 0,
+    this.setId,
   });
 
   int get maxUpgradeLevel =>
@@ -110,7 +112,7 @@ class Equipment {
   int get upgradeGoldCost => (sellPrice * 0.8 * (upgradeLevel + 1)).round() + 40;
   int get upgradeGemsCost => 1 + (upgradeLevel ~/ 2);
 
-  Equipment copyWith({int? upgradeLevel}) {
+  Equipment copyWith({int? upgradeLevel, String? setId}) {
     return Equipment(
       id: id,
       name: name,
@@ -128,6 +130,7 @@ class Equipment {
       emoji: emoji,
       sellPrice: sellPrice,
       upgradeLevel: upgradeLevel ?? this.upgradeLevel,
+      setId: setId ?? this.setId,
     );
   }
 
@@ -148,6 +151,7 @@ class Equipment {
         'emoji': emoji,
         'sellPrice': sellPrice,
         'upgradeLevel': upgradeLevel,
+        'setId': setId,
       };
 
   factory Equipment.fromJson(Map<String, dynamic> json) => Equipment(
@@ -169,5 +173,6 @@ class Equipment {
         emoji: json['emoji'] as String? ?? '🛡️',
         sellPrice: json['sellPrice'] as int? ?? 50,
         upgradeLevel: json['upgradeLevel'] as int? ?? 0,
+        setId: json['setId'] as String?,
       );
 }

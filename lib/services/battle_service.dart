@@ -39,6 +39,24 @@ class BattleService {
   final List<FloatingText> _floatingTexts = [];
   final List<String> _battleLog = [];
   bool _isFinished = false;
+  bool _hasRevived = false;
+  double _enemySlowTimer = 0.0;
+
+  // Boss Skill & Telegraph State
+  final Map<String, double> _bossSkillCooldowns = {};
+  bool _isTelegraphing = false;
+  double _telegraphTimer = 0.0;
+  EnemySkill? _currentTelegraphSkill;
+
+  // Hero Debuff Timers
+  double _heroFreezeTimer = 0.0;
+  double _heroDefDownTimer = 0.0;
+  int _heroBurnTicks = 0;
+  double _heroBurnAccumulator = 0.0;
+
+  // Combat damage analytics breakdown
+  final Map<String, int> _heroDamageBreakdown = {};
+  final Map<String, int> _enemyDamageBreakdown = {};
 
   double battleSpeed = 1.0;
   int _totalDamageDealt = 0;
@@ -79,6 +97,13 @@ class BattleService {
     }
     if (this.enemy.hpRegenPercentPerSecond > 0) {
       _addLog('⚠️ Kẻ địch có nội tại [💚 Hồi Máu ${(this.enemy.hpRegenPercentPerSecond * 100).round()}%/giây]!');
+    }
+
+    if (this.enemy.isBoss && this.enemy.bossSkills.isNotEmpty) {
+      for (int i = 0; i < this.enemy.bossSkills.length; i++) {
+        final skill = this.enemy.bossSkills[i];
+        _bossSkillCooldowns[skill.id] = 4.0 + (i * 5.0);
+      }
     }
 
     _emitState(isFighting: true);
@@ -187,27 +212,97 @@ class BattleService {
       }
     }
 
-    // 8. Hero Action Loop
-    _heroAttackTimer += dt;
-    final heroInterval = player.attackInterval;
-    if (_heroAttackTimer >= heroInterval) {
-      _heroAttackTimer = 0.0;
-      _executeHeroAction();
-      if (enemy.isDead) {
-        _handleVictory();
-        return;
+    // Hero Freeze & Def Down timer countdowns
+    if (_heroFreezeTimer > 0) {
+      _heroFreezeTimer = max(0.0, _heroFreezeTimer - dt);
+    }
+    if (_heroDefDownTimer > 0) {
+      _heroDefDownTimer = max(0.0, _heroDefDownTimer - dt);
+    }
+
+    // Hero Burn Ticks (Ifrit skill 2: 10% max HP/s for 5s)
+    if (_heroBurnTicks > 0) {
+      _heroBurnAccumulator += dt;
+      if (_heroBurnAccumulator >= 1.0) {
+        _heroBurnAccumulator = 0.0;
+        _heroBurnTicks--;
+        final burnDmg = max(5, (player.maxHp * 0.10).round());
+        _heroHp = max(0, _heroHp - burnDmg);
+        _totalDamageTaken += burnDmg;
+        _enemyDamageBreakdown['Thiêu Rụi (Burn)'] =
+            (_enemyDamageBreakdown['Thiêu Rụi (Burn)'] ?? 0) + burnDmg;
+        _addFloatingText('-$burnDmg 🔥', Colors.orangeAccent, isHeroTarget: true);
+        _addLog('${player.name} chịu $burnDmg sát thương Thiêu Rụi từ ${enemy.name}!');
+        if (_heroHp <= 0) {
+          _handleDefeat();
+          return;
+        }
       }
     }
 
-    // 9. Enemy Action Loop
-    _enemyAttackTimer += dt;
-    final enemyInterval = enemy.attackInterval;
-    if (_enemyAttackTimer >= enemyInterval) {
-      _enemyAttackTimer = 0.0;
-      _executeEnemyAction();
-      if (_heroHp <= 0) {
-        _handleDefeat();
-        return;
+    // Boss Skills & 1.2s Telegraph Cooldown handling
+    if (enemy.isBoss && enemy.bossSkills.isNotEmpty && !_isTelegraphing) {
+      for (final skill in enemy.bossSkills) {
+        final currentCd = _bossSkillCooldowns[skill.id] ?? 0.0;
+        if (currentCd > 0) {
+          _bossSkillCooldowns[skill.id] = max(0.0, currentCd - dt);
+        }
+      }
+
+      for (final skill in enemy.bossSkills) {
+        final currentCd = _bossSkillCooldowns[skill.id] ?? 0.0;
+        if (currentCd <= 0.0) {
+          _isTelegraphing = true;
+          _telegraphTimer = 1.2; // 1.2s warning
+          _currentTelegraphSkill = skill;
+          _addLog('⚠️ CẢNH BÁO: ${enemy.name} chuẩn bị tung [${skill.name}]!');
+          break;
+        }
+      }
+    }
+
+    // Process Telegraphing countdown
+    if (_isTelegraphing && _currentTelegraphSkill != null) {
+      _telegraphTimer -= dt;
+      if (_telegraphTimer <= 0) {
+        final skillToCast = _currentTelegraphSkill!;
+        _bossSkillCooldowns[skillToCast.id] = skillToCast.cooldown;
+        _isTelegraphing = false;
+        _currentTelegraphSkill = null;
+        _executeBossTelegraphedSkill(skillToCast);
+        if (_heroHp <= 0) return;
+      }
+    }
+
+    // 8. Hero Action Loop (Frozen hero cannot act)
+    if (_heroFreezeTimer <= 0) {
+      _heroAttackTimer += dt;
+      final heroInterval = player.attackInterval;
+      if (_heroAttackTimer >= heroInterval) {
+        _heroAttackTimer = 0.0;
+        _executeHeroAction();
+        if (enemy.isDead) {
+          _handleVictory();
+          return;
+        }
+      }
+    }
+
+    // 9. Enemy Action Loop (Slowed down by 30% if under Hàn Băng set effect)
+    // While telegraphing a major telegraphed skill, boss does not perform basic attacks
+    if (!_isTelegraphing) {
+      if (_enemySlowTimer > 0) {
+        _enemySlowTimer = max(0.0, _enemySlowTimer - dt);
+      }
+      _enemyAttackTimer += (_enemySlowTimer > 0 ? dt * 0.70 : dt);
+      final enemyInterval = enemy.attackInterval;
+      if (_enemyAttackTimer >= enemyInterval) {
+        _enemyAttackTimer = 0.0;
+        _executeEnemyAction();
+        if (_heroHp <= 0) {
+          _handleDefeat();
+          return;
+        }
       }
     }
 
@@ -317,11 +412,58 @@ class BattleService {
     }
 
     // Defense mitigation
+    // Huyết Ma 3-piece: Below 30% HP, +20% ATK
+    if (player.hasSetBonus3('huyet_ma') && _heroHp < (_heroMaxHp * 0.30)) {
+      rawDamage *= 1.20;
+    }
+
     int netDamage = max(1, (rawDamage - enemy.def).round());
     enemy.currentHp = max(0, enemy.currentHp - netDamage);
     _totalDamageDealt += netDamage;
     if (isCrit && netDamage > _highestCrit) {
       _highestCrit = netDamage;
+    }
+
+    // Set Viêm Long 3-piece: Basic attack inflicts 1 extra stack of Burn (3s)
+    if (chosenSkill.type == SkillType.basic && player.hasSetBonus3('viem_long')) {
+      enemy.burnTicksLeft = max(enemy.burnTicksLeft, 3);
+      enemy.burnDamagePerTick = max(enemy.burnDamagePerTick, max(15, (player.magicAtk * 0.20).round()));
+      _addLog('🔥 [Set Viêm Long 3/3]: Đòn đánh thường gây thêm 1 tầng Thiêu Đốt!');
+    }
+
+    // Set Hàn Băng 3-piece: 20% chance to slow enemy by 30% (2s)
+    if (player.hasSetBonus3('han_bang') && _rng.nextDouble() < 0.20) {
+      _enemySlowTimer = 2.0;
+      _addFloatingText('❄️ LÀM CHẬM 30%!', Colors.cyanAccent, isHeroTarget: false);
+      _addLog('❄️ [Set Hàn Băng 3/3]: Đòn đánh làm chậm tốc đánh ${enemy.name} 30% trong 2s!');
+    }
+
+    // Set Lôi Đình 3-piece: Crit strikes extra 1 lightning bolt (50% damage, non-crit)
+    if (isCrit && player.hasSetBonus3('loi_dinh')) {
+      final lightningDmg = max(1, (netDamage * 0.50).round());
+      enemy.currentHp = max(0, enemy.currentHp - lightningDmg);
+      _totalDamageDealt += lightningDmg;
+      _addFloatingText('⚡ LÔI PHẠT!\n+$lightningDmg', Colors.amberAccent, isHeroTarget: false);
+      _addLog('⚡ [Set Lôi Đình 3/3]: Bạo kích giáng sấm sét gây thêm $lightningDmg sát thương!');
+    }
+
+    // Set Huyết Ma 2 & 3-piece: Lifesteal (+10% base, +50% under 30% HP)
+    double lifestealRatio = 0.0;
+    if (player.hasSetBonus2('huyet_ma')) {
+      lifestealRatio += 0.10;
+    }
+    if (player.hasSetBonus3('huyet_ma') && _heroHp < (_heroMaxHp * 0.30)) {
+      lifestealRatio += 0.50;
+    }
+    if (lifestealRatio > 0 && netDamage > 0) {
+      final healAmt = max(1, (netDamage * lifestealRatio).round());
+      final actualHeal = min(healAmt, _heroMaxHp - _heroHp);
+      if (actualHeal > 0) {
+        _heroHp += actualHeal;
+        _totalHealed += actualHeal;
+        _addFloatingText('+$actualHeal 🩸', Colors.greenAccent, isHeroTarget: true);
+        _addLog('🩸 [Set Huyết Ma]: Hút máu hồi phục $actualHeal HP!');
+      }
     }
 
     // Apply Burn status effect if skill causes burn
@@ -353,8 +495,10 @@ class BattleService {
     );
 
     _addLog(
-      '${player.name} dùng ${chosenSkill.name} gây $netDamage ${isCrit ? '(CHÍ MẠNG!)' : ''} lên ${enemy.name}.',
+      '${player.name} dùng [${chosenSkill.name}] — gây $netDamage ${isCrit ? '(CHÍ MẠNG!)' : ''} lên ${enemy.name}.',
     );
+    _heroDamageBreakdown[chosenSkill.name] =
+        (_heroDamageBreakdown[chosenSkill.name] ?? 0) + netDamage;
 
     // Zone 4: Reflect Damage (Phản đòn 20%)
     if (enemy.reflectDamagePercent > 0 && netDamage > 0) {
@@ -395,11 +539,15 @@ class BattleService {
       double rawDmg = enemy.effectiveAtk.toDouble();
       bool isSpecial = false;
       String attackName = 'Đòn Đánh';
-      if (enemy.specialSkill != null && _rng.nextDouble() < 0.35) {
+      if (enemy.specialSkill != null && enemy.bossSkills.isEmpty && _rng.nextDouble() < 0.35) {
         isSpecial = true;
         rawDmg *= enemy.specialSkill!.damageMultiplier;
         attackName = enemy.specialSkill!.name;
         _addLog('${enemy.name} tung chiêu [$attackName]!');
+        // Set Hàn Băng 2-piece: +15% magic resistance
+        if (player.hasSetBonus2('han_bang')) {
+          rawDmg *= 0.85;
+        }
       }
 
       bool isCrit = _rng.nextDouble() < enemy.critRate;
@@ -423,6 +571,8 @@ class BattleService {
 
       _heroHp = max(0, _heroHp - netDmg);
       _totalDamageTaken += netDmg;
+      _enemyDamageBreakdown[attackName] =
+          (_enemyDamageBreakdown[attackName] ?? 0) + netDmg;
 
       String enemyHitText = isSpecial ? '$attackName\n-$netDmg' : '-$netDmg';
       if (isCrit) enemyHitText = 'CRIT! -$netDmg 💥';
@@ -435,7 +585,7 @@ class BattleService {
       );
 
       _addLog(
-        '${enemy.name} dùng [$attackName] gây $netDmg sát thương ${isCrit ? '(CHÍ MẠNG!)' : ''}.',
+        '${enemy.name} dùng [$attackName] — gây $netDmg sát thương ${isCrit ? '(CHÍ MẠNG!)' : ''} lên ${player.name}.',
       );
     }
 
@@ -443,6 +593,76 @@ class BattleService {
     // Endless Modifier: Double Strike
     if (enemy.doubleStrike && _heroHp > 0) {
       performSingleStrike();
+    }
+  }
+
+  void _executeBossTelegraphedSkill(EnemySkill skill) {
+    if (_isFinished) return;
+
+    // 1. Debuff and utility effects
+    if (skill.causesHeroFreeze) {
+      _heroFreezeTimer = 2.0;
+      _addFloatingText('🧊 ĐÓNG BĂNG 2s!', Colors.cyanAccent, isHeroTarget: true);
+      _addLog('🧊 [Đóng Băng]: ${player.name} bị đóng băng không thể ra đòn trong 2 giây!');
+    }
+    if (skill.causesHeroDefDown) {
+      _heroDefDownTimer = 5.0;
+      _addFloatingText('🦁 GIẢM 20% GIÁP (5s)!', Colors.amberAccent, isHeroTarget: true);
+      _addLog('🦁 [Gầm Thét]: ${player.name} bị giảm 20% DEF trong 5 giây!');
+    }
+    if (skill.causesHeroBurn) {
+      _heroBurnTicks = 5;
+      _addFloatingText('🌋 THIÊU RỤI 5s!', Colors.deepOrangeAccent, isHeroTarget: true);
+      _addLog('🌋 [Thiêu Rụi]: ${player.name} bị thiêu đốt dữ dội (10% HP/s)!');
+    }
+    if (skill.healsBossPercent) {
+      int healAmt = (enemy.maxHp * 0.15).round();
+      enemy.currentHp = min(enemy.maxHp, enemy.currentHp + healAmt);
+      _addFloatingText('+$healAmt HP 👻', Colors.greenAccent, isHeroTarget: false);
+      _addLog('👻 [Triệu Hồi Oán Linh]: ${enemy.name} hồi phục $healAmt HP!');
+    }
+
+    // 2. Damage execution (only if skill has damageMultiplier > 0)
+    if (skill.damageMultiplier > 0) {
+      double rawDmg = enemy.effectiveAtk * skill.damageMultiplier;
+      // Hàn Băng 2-piece magic resistance
+      if (skill.isMagic && player.hasSetBonus2('han_bang')) {
+        rawDmg *= 0.85;
+      }
+
+      double heroDef = _heroDefDownTimer > 0 ? player.physicalDef * 0.80 : player.physicalDef;
+      int netDmg = max(1, (rawDmg - heroDef).round());
+
+      // Shield absorb
+      if (_heroShield > 0) {
+        if (_heroShield >= netDmg) {
+          _heroShield -= netDmg;
+          _addFloatingText('-$netDmg Giáp 🛡️', Colors.cyanAccent, isHeroTarget: true);
+          return;
+        } else {
+          netDmg -= _heroShield;
+          _heroShield = 0;
+        }
+      }
+
+      _heroHp = max(0, _heroHp - netDmg);
+      _totalDamageTaken += netDmg;
+      _enemyDamageBreakdown[skill.name] = (_enemyDamageBreakdown[skill.name] ?? 0) + netDmg;
+
+      _addFloatingText(
+        '${skill.name}\n-$netDmg 💥',
+        Colors.redAccent,
+        isCrit: true,
+        isHeroTarget: true,
+      );
+
+      _addLog(
+        '${enemy.name} dùng [${skill.name}] — gây $netDmg sát thương lên ${player.name}.',
+      );
+
+      if (_heroHp <= 0) {
+        _handleDefeat();
+      }
     }
   }
 
@@ -480,6 +700,16 @@ class BattleService {
   }
 
   void _handleDefeat() {
+    // Immortality node check: Revive once per battle with 50% HP
+    if (!_hasRevived && (player.prestigeNodeLevels['immortality'] ?? 0) > 0) {
+      _hasRevived = true;
+      _heroHp = (_heroMaxHp * 0.50).round();
+      _addFloatingText('✨ BẤT TỬ HỒI SINH! ✨', Colors.amberAccent, isCrit: true, isHeroTarget: true);
+      _addLog('✨ BẤT TỬ: ${player.name} bùng nổ linh lực, hồi sinh thần kỳ với 50% HP!');
+      _emitState(isFighting: true);
+      return;
+    }
+
     _isFinished = true;
     _timer?.cancel();
     _addLog('THẤT BẠI! Bạn đã gục ngã trước ${enemy.name}...');
@@ -546,6 +776,11 @@ class BattleService {
       totalHealed: _totalHealed,
       highestCritDamage: _highestCrit,
       battleSpeed: battleSpeed,
+      telegraphSkillName: _isTelegraphing ? _currentTelegraphSkill?.name : null,
+      telegraphSkillIcon: _isTelegraphing ? _currentTelegraphSkill?.icon : null,
+      isTelegraphing: _isTelegraphing,
+      heroDamageBreakdown: Map.from(_heroDamageBreakdown),
+      enemyDamageBreakdown: Map.from(_enemyDamageBreakdown),
     );
   }
 

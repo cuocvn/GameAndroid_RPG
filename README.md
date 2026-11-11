@@ -84,6 +84,57 @@ game AND/
 - Mở khóa tại Level 5 với 4 phân loại tab: **Vũ khí ⚔️**, **Giáp 🛡️**, **Phụ kiện 💍**, **Đá quý 💎**.
 - Cho phép mua trang bị bằng Vàng và đổi Vàng lấy Đá Cường Hóa để nâng cấp trang bị lên tới +5 (+10% chỉ số mỗi cấp).
 
+### 2.5. Hệ Thống Chuyển Sinh (Prestige / Ngộ Đạo)
+- **Điều kiện mở khóa**: Đạt **Level 30** HOẶC vượt qua **Tầng 15 Tháp Vô Tận** (Endless Tower).
+- **Cơ chế Chuyển Sinh**:
+  - Reset Level về 1, điểm chỉ số phân bổ về mặc định, trang bị trở về khởi đầu, vàng về 0.
+  - **Giữ lại vĩnh viễn**: Điểm Ngộ Đạo, các node đã nâng trên Cây Ngộ Đạo, thành tựu, kỷ lục tầng Tháp Vô Tận, Kim Cương 💎.
+  - **Công thức tính Điểm Ngộ Đạo**:
+    $$\text{Điểm} = \left\lfloor \frac{\text{Level}}{5} \right\rfloor + \left\lfloor \frac{\text{EndlessFloor}}{3} \right\rfloor + (\text{Số Boss Vùng Đã Hạ}) \times 2$$
+    - Hệ số Chuyển Sinh lần thứ $N$: Nhân thêm $1.0 + (N - 1) \times 0.2$ (khuyến khích người chơi chuyển sinh nhiều lần).
+- **Cây Ngộ Đạo (Prestige Tree)**: Gồm 10 nhánh ngọc ấn vĩnh viễn:
+  1. *Khai Sáng*: +10% EXP nhận được mỗi cấp (Tối đa 5 cấp).
+  2. *Tài Lộc*: +10% Vàng nhận được mỗi cấp (Tối đa 5 cấp).
+  3. *Sức Mạnh Cổ Đại*: +5% tất cả chỉ số nhân vật (Tối đa 10 cấp).
+  4. *Kho Báu*: +1 slot bán đồ trong Cửa Hàng mỗi ngày (Tối đa 1 cấp).
+  5. *Tốc Độ*: +10% tốc độ đánh cơ bản (Tối đa 5 cấp).
+  6. *May Mắn*: +5% tỉ lệ rơi trang bị Rare+ (Tối đa 5 cấp).
+  7. *Bền Bỉ*: +15% Max HP (Tối đa 5 cấp).
+  8. *Khởi Đầu*: Bắt đầu chu kỳ với +5 điểm chỉ số tự do (Tối đa 3 cấp).
+  9. *Hào Quang*: +1 ô kỹ năng xuất trận (Tối đa 6 ô xuất trận).
+  10. *Bất Tử*: Tự động hồi sinh 1 lần mỗi trận đấu với 50% HP (Tối đa 1 cấp).
+- **Tẩy Điểm Cây Ngộ Đạo**: Cho phép hoàn trả toàn bộ điểm Ngộ Đạo với chi phí 5 💎 để thử nghiệm các build khác nhau.
+
+### 2.6. Hệ Thống Bộ Trang Bị (Set Bonus) & Bộ Sưu Tập
+Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), mang đến hiệu ứng kích hoạt chiến đấu mạnh mẽ:
+- 🔥 **Bộ Viêm Long**:
+  - *2 món*: +20% sát thương kỹ năng hệ Hỏa.
+  - *3 món (Full)*: Mỗi đòn đánh cơ bản gây thêm 1 stack Thiêu Đốt (Burn) kéo dài 3 giây.
+- ❄️ **Bộ Hàn Băng**:
+  - *2 món*: +15% kháng sát thương phép thuật.
+  - *3 món (Full)*: Đòn đánh có 20% tỉ lệ làm chậm tốc đánh đối thủ 30% trong 2 giây.
+- ⚡ **Bộ Lôi Đình**:
+  - *2 món*: +10% tỉ lệ chí mạng.
+  - *3 món (Full)*: Mỗi khi đánh chí mạng sẽ giáng thêm 1 tia sét Lôi Đình gây 50% sát thương kèm theo.
+- 🩸 **Bộ Huyết Ma**:
+  - *2 món*: +10% tỉ lệ hút máu (Lifesteal) khi tấn công.
+  - *3 món (Full)*: Khi HP nhân vật xuống dưới 30%, tăng +50% tỉ lệ hút máu và +20% sức tấn công ATK.
+- **Bộ Sưu Tập (Collection Tab)**: Nằm tại màn hình Build, hiển thị chi tiết tiến độ sở hữu các bộ trang bị, nguồn gốc rơi từ Boss từng vùng hay tầng chẵn Tháp Vô Tận.
+
+### 2.7. Boss Patterns, Telegraph Cảnh Báo & Phân Tích Sát Thương
+- **Bộ Kỹ Năng Boss Từng Vùng (Independent Cooldowns)**:
+  - **Vùng 1 (Thú Vương Cuồng Nộ)**: *Cắn Xé* (150% ATK, CD 8s) & *Gầm Thét* (Giảm 20% DEF của tướng trong 5s, CD 15s).
+  - **Vùng 2 (Hỏa Ma Vương Ifrit)**: *Cầu Lửa* (180% ATK phép, CD 8s) & *Thiêu Rụi* (Đốt 10% Max HP/s trong 5s, CD 15s).
+  - **Vùng 3 (Cổ Thần Ymir)**: *Băng Phong* (200% ATK phép, CD 8s) & *Đóng Băng* (Khóa tấn công của tướng trong 2s, CD 15s).
+  - **Vùng 4 (Minh Vương Hades)**: *Lưỡi Hái Tử Thần* (220% ATK, CD 8s) & *Triệu Hồi Oán Linh* (Hồi phục 15% HP cho Boss, CD 15s).
+  - **Vùng 5 (Chúa Tể Diablo)**: *Hủy Diệt* (250% ATK, CD 8s) & *Đòn Tối Thượng* (Tuyệt kỹ 400% ATK, CD 20s).
+- **Telegraph Báo Hiệu Trước 1.2 Giây**:
+  - Trước khi thi triển kỹ năng 1.2s, màn hình hiện dải biểu ngữ cảnh báo màu đỏ chéo `⚠️ [TÊN CHIÊU THỨC] SẮP TỚI!`.
+  - Icon kỹ năng của Boss lóe sáng cạnh khung avatar, Boss dừng đánh thường để vận công.
+- **Bảng Phân Tích Sát Thương Chi Tiết (Damage Analytics Breakdown)**:
+  - Nhật ký chiến đấu ghi lại từng chiêu thức và lượng sát thương cụ thể.
+  - Sau trận chiến hoặc trong lúc thi đấu, nút **"XUẤT PHÂN TÍCH SÁT THƯƠNG"** hiển thị popup biểu đồ % sát thương của từng kỹ năng giúp người chơi tối ưu hóa build trang bị và khắc chế Boss.
+
 ---
 
 ## 3. Hướng Dẫn Chạy & Kiểm Thử
@@ -92,13 +143,18 @@ game AND/
 ```bash
 flutter test
 ```
-Tất cả 10/10 tests được đảm bảo 100% Pass:
+Tất cả 16/16 tests được đảm bảo 100% Pass:
 - Baseline Vùng 1 quái thường làm mất $\ge 40\%$ HP nếu build sai.
 - Boss Vùng 1 đánh bại người chơi chưa nâng cấp.
-- Pure INT thất bại ở Vùng 3 do Kháng Phép.
+- Pure INT thất bại ở Vùng 3 do Kháng Phép 40%.
 - Pure STR thất bại ở Boss Diablo Vùng 5 do Hồi Máu 5%/s.
 - Pure VIT Tanker vượt qua Boss Vùng 4 Hades.
 - Endless Tower scaling & loot rules.
+- Hệ thống Quests, Achievements & Respec.
+- Tính toán điểm Ngộ Đạo, điều kiện mở Chuyển Sinh & hệ số prestige cấp $N$.
+- Tác động chỉ số của các node trên Cây Ngộ Đạo.
+- Kích hoạt đúng hiệu ứng 2 món và 3 món của 4 Bộ Trang Bị Hoàng Kim.
+- Kiểm tra toàn diện 5 Boss Vùng với đầy đủ 2 chiêu thức đặc trưng, thời gian hồi chiêu và cơ chế Telegraph.
 
 ### Chạy Ứng Dụng Trên Android Emulator hoặc Thiết Bị Thật
 ```bash

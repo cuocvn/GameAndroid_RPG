@@ -9,6 +9,7 @@ import '../data/seed_skills.dart';
 import '../models/battle_state.dart';
 import '../models/enemy.dart';
 import '../models/equipment.dart';
+import '../models/equipment_set.dart';
 import '../models/player.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
@@ -211,6 +212,10 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                 // Active Skill Banner or Diablo Enrage Banner
                 if (state.activeSkillCastName != null)
                   _buildCenterSkillBanner(state.activeSkillCastName!),
+
+                // Boss Telegraph Warning Banner (Red diagonal)
+                if (state.isTelegraphing && state.telegraphSkillName != null)
+                  _buildTelegraphDiagonalBanner(state.telegraphSkillName!),
 
                 // Floating Combat Log Icon & Collapsible Drawer
                 Positioned(
@@ -452,13 +457,54 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  player.name,
-                  style: GoogleFonts.cinzel(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      player.name,
+                      style: GoogleFonts.cinzel(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    for (final setId in ['viem_long', 'han_bang', 'loi_dinh', 'huyet_ma'])
+                      if (player.hasSetBonus3(setId)) ...[
+                        Tooltip(
+                          message: 'Full Set 3/3 ${EquipmentSetData.getById(setId)?.name}: ${EquipmentSetData.getById(setId)?.threePieceBonusDesc}',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.black87,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: EquipmentSetData.getById(setId)?.color ?? AppTheme.goldAccent,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  EquipmentSetData.getById(setId)?.icon ?? '✨',
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '3/3',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: EquipmentSetData.getById(setId)?.color ?? AppTheme.goldAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                  ],
                 ),
                 const SizedBox(height: 3),
                 HpBar(
@@ -540,25 +586,65 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
           ),
           const SizedBox(width: 8),
 
-          // Monster Mini Avatar
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: state.enemy.isBoss ? AppTheme.goldAccent : AppTheme.redAccent,
-                width: 1.5,
-              ),
-            ),
-            child: ClipOval(
-              child: AssetMapping.safeImage(
-                state.enemy.imageAsset,
+          // Monster Mini Avatar with Telegraph glowing skill icon
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
                 width: 38,
                 height: 38,
-                fallbackEmoji: state.enemy.fallbackEmoji,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: state.isTelegraphing
+                        ? Colors.redAccent
+                        : (state.enemy.isBoss ? AppTheme.goldAccent : AppTheme.redAccent),
+                    width: state.isTelegraphing ? 2.5 : 1.5,
+                  ),
+                  boxShadow: state.isTelegraphing
+                      ? [
+                          BoxShadow(
+                            color: Colors.redAccent.withOpacity(0.9),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: ClipOval(
+                  child: AssetMapping.safeImage(
+                    state.enemy.imageAsset,
+                    width: 38,
+                    height: 38,
+                    fallbackEmoji: state.enemy.fallbackEmoji,
+                  ),
+                ),
               ),
-            ),
+              if (state.isTelegraphing && state.telegraphSkillIcon != null)
+                Positioned(
+                  top: -8,
+                  left: -8,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade900,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppTheme.goldAccent, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.goldAccent.withOpacity(0.8),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      state.telegraphSkillIcon!,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -833,9 +919,25 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18, color: Colors.white70),
-                  onPressed: () => setState(() => _showCombatLogOverlay = false),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _showDamageBreakdownModal(state),
+                      icon: const Icon(Icons.analytics_outlined, size: 14, color: AppTheme.goldAccent),
+                      label: Text(
+                        'Phân Tích',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 11,
+                          color: AppTheme.goldAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: Colors.white70),
+                      onPressed: () => setState(() => _showCombatLogOverlay = false),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -995,6 +1097,27 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                       ],
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showDamageBreakdownModal(state),
+                      icon: const Icon(Icons.analytics_outlined, size: 15),
+                      label: Text(
+                        'XUẤT PHÂN TÍCH SÁT THƯƠNG',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade900,
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.purpleAccent, width: 1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
                   if (state.droppedEquipment.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Text(
@@ -1067,6 +1190,27 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                           ],
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showDamageBreakdownModal(state),
+                      icon: const Icon(Icons.analytics_outlined, size: 15),
+                      label: Text(
+                        'XUẤT PHÂN TÍCH SÁT THƯƠNG',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade900,
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.purpleAccent, width: 1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                     ),
                   ),
                 ],
@@ -1226,5 +1370,204 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
         ),
       );
     }
+  }
+
+  // --- Boss Telegraph Red Diagonal Banner ---
+  Widget _buildTelegraphDiagonalBanner(String skillName) {
+    return Positioned(
+      top: MediaQuery.of(context).size.height * 0.36,
+      left: -60,
+      right: -60,
+      child: Transform.rotate(
+        angle: -0.08,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.red.shade900.withOpacity(0.92),
+            border: const Border.symmetric(
+              horizontal: BorderSide(color: AppTheme.goldAccent, width: 2.2),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.redAccent.withOpacity(0.8),
+                blurRadius: 20,
+                spreadRadius: 3,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('⚠️', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Text(
+                '⚠️ [$skillName] SẮP TỚI! ⚠️',
+                style: GoogleFonts.cinzel(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 1.5,
+                  shadows: const [
+                    Shadow(color: Colors.black, blurRadius: 6, offset: Offset(0, 2)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Combat Analytics Modal: Damage Breakdown per Skill ---
+  void _showDamageBreakdownModal(BattleState state) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.bgSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        final heroTotal = state.totalDamageDealt > 0 ? state.totalDamageDealt : 1;
+        final enemyTotal = state.totalDamageTaken > 0 ? state.totalDamageTaken : 1;
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.analytics, color: AppTheme.goldAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'PHÂN TÍCH SÁT THƯƠNG CHI TIẾT',
+                          style: GoogleFonts.cinzel(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.goldAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 8),
+
+                // SECTION 1: HERO DAMAGE BREAKDOWN
+                Text(
+                  '⚔️ SÁT THƯƠNG NGƯỜI CHƠI (TỔNG: ${state.totalDamageDealt})',
+                  style: GoogleFonts.cinzel(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (state.heroDamageBreakdown.isEmpty)
+                  Text('Chưa ghi nhận sát thương',
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white38))
+                else
+                  ...state.heroDamageBreakdown.entries.map((entry) {
+                    final percent = (entry.value / heroTotal * 100).clamp(0.0, 100.0);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(entry.key,
+                                  style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white)),
+                              Text('${entry.value} (${percent.toStringAsFixed(1)}%)',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.goldAccent)),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: percent / 100,
+                              backgroundColor: Colors.white10,
+                              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.goldAccent),
+                              minHeight: 5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                const SizedBox(height: 16),
+
+                // SECTION 2: ENEMY/BOSS DAMAGE BREAKDOWN
+                Text(
+                  '💀 SÁT THƯƠNG KẺ ĐỊCH / BOSS (TỔNG: ${state.totalDamageTaken})',
+                  style: GoogleFonts.cinzel(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (state.enemyDamageBreakdown.isEmpty)
+                  Text('Kẻ địch chưa gây sát thương',
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white38))
+                else
+                  ...state.enemyDamageBreakdown.entries.map((entry) {
+                    final percent = (entry.value / enemyTotal * 100).clamp(0.0, 100.0);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(entry.key,
+                                  style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white70)),
+                              Text('${entry.value} (${percent.toStringAsFixed(1)}%)',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.redAccent)),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: percent / 100,
+                              backgroundColor: Colors.white10,
+                              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.redAccent),
+                              minHeight: 5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                const SizedBox(height: 14),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

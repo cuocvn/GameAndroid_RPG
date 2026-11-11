@@ -1,14 +1,28 @@
 class EnemySkill {
+  final String id;
   final String name;
   final double damageMultiplier;
-  final int cooldown; // In seconds or attack count
+  final double cooldown; // In seconds
   final String description;
+  final String icon;
+  final bool isMagic;
+  final bool causesHeroFreeze; // Ymir skill 2: hero cannot attack for 2s
+  final bool causesHeroDefDown; // Thú vương skill 2: reduces hero def by 20% for 5s
+  final bool causesHeroBurn; // Ifrit skill 2: burns hero for 5s (10% max HP/s)
+  final bool healsBossPercent; // Hades skill 2: heals 15% HP
 
   const EnemySkill({
+    this.id = '',
     required this.name,
     this.damageMultiplier = 1.5,
-    this.cooldown = 4,
+    this.cooldown = 8.0,
     this.description = '',
+    this.icon = '⚡',
+    this.isMagic = false,
+    this.causesHeroFreeze = false,
+    this.causesHeroDefDown = false,
+    this.causesHeroBurn = false,
+    this.healsBossPercent = false,
   });
 }
 
@@ -30,6 +44,7 @@ class Enemy {
   final String imageAsset;
   final String fallbackEmoji;
   final EnemySkill? specialSkill;
+  final List<EnemySkill> bossSkills;
 
   // Zone special modifiers
   final double magicResistPercent; // Vùng 3: Kháng phép 40% (0.40)
@@ -61,6 +76,7 @@ class Enemy {
     required this.imageAsset,
     this.fallbackEmoji = '👾',
     this.specialSkill,
+    this.bossSkills = const [],
     this.magicResistPercent = 0.0,
     this.reflectDamagePercent = 0.0,
     this.hpRegenPercentPerSecond = 0.0,
@@ -126,6 +142,7 @@ class Enemy {
       imageAsset: imageAsset,
       fallbackEmoji: fallbackEmoji,
       specialSkill: specialSkill,
+      bossSkills: bossSkills,
       magicResistPercent: magicResistPercent,
       reflectDamagePercent: reflectDamagePercent,
       hpRegenPercentPerSecond: hpRegenPercentPerSecond,

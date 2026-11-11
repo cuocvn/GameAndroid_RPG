@@ -43,6 +43,11 @@ class BattleState {
   final int totalHealed;
   final int highestCritDamage;
   final double battleSpeed;
+  final String? telegraphSkillName;
+  final String? telegraphSkillIcon;
+  final bool isTelegraphing;
+  final Map<String, int> heroDamageBreakdown;
+  final Map<String, int> enemyDamageBreakdown;
 
   const BattleState({
     required this.heroHp,
@@ -67,6 +72,11 @@ class BattleState {
     this.totalHealed = 0,
     this.highestCritDamage = 0,
     this.battleSpeed = 1.0,
+    this.telegraphSkillName,
+    this.telegraphSkillIcon,
+    this.isTelegraphing = false,
+    this.heroDamageBreakdown = const {},
+    this.enemyDamageBreakdown = const {},
   });
 
   double get dps => battleDuration > 0
@@ -97,6 +107,12 @@ class BattleState {
     int? highestCritDamage,
     double? battleSpeed,
     bool clearSkillCast = false,
+    String? telegraphSkillName,
+    String? telegraphSkillIcon,
+    bool? isTelegraphing,
+    bool clearTelegraph = false,
+    Map<String, int>? heroDamageBreakdown,
+    Map<String, int>? enemyDamageBreakdown,
   }) {
     return BattleState(
       heroHp: heroHp ?? this.heroHp,
@@ -123,6 +139,11 @@ class BattleState {
       totalHealed: totalHealed ?? this.totalHealed,
       highestCritDamage: highestCritDamage ?? this.highestCritDamage,
       battleSpeed: battleSpeed ?? this.battleSpeed,
+      telegraphSkillName: clearTelegraph ? null : (telegraphSkillName ?? this.telegraphSkillName),
+      telegraphSkillIcon: clearTelegraph ? null : (telegraphSkillIcon ?? this.telegraphSkillIcon),
+      isTelegraphing: isTelegraphing ?? this.isTelegraphing,
+      heroDamageBreakdown: heroDamageBreakdown ?? this.heroDamageBreakdown,
+      enemyDamageBreakdown: enemyDamageBreakdown ?? this.enemyDamageBreakdown,
     );
   }
 }

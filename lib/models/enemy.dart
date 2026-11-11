@@ -57,6 +57,8 @@ class Enemy {
   bool isEnraged; // Boss Vùng 5 Diablo Cuồng Nộ khi HP < 30%
   int burnTicksLeft;
   int burnDamagePerTick;
+  final int maxMana;
+  int currentMana;
 
   Enemy({
     required this.id,
@@ -85,7 +87,10 @@ class Enemy {
     this.isEnraged = false,
     this.burnTicksLeft = 0,
     this.burnDamagePerTick = 0,
-  }) : currentHp = currentHp ?? maxHp;
+    this.maxMana = 0,
+    int? currentMana,
+  })  : currentHp = currentHp ?? maxHp,
+        currentMana = currentMana ?? maxMana;
 
   /// Effective ATK including Enrage (+50%)
   int get effectiveAtk => isEnraged ? (atk * 1.5).round() : atk;
@@ -151,6 +156,8 @@ class Enemy {
       isEnraged: false,
       burnTicksLeft: 0,
       burnDamagePerTick: 0,
+      maxMana: maxMana,
+      currentMana: maxMana,
     );
   }
 }

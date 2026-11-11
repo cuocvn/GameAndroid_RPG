@@ -3,14 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/seed_enemies.dart';
 import '../data/seed_equipment.dart';
 import '../data/seed_skills.dart';
+import '../models/arena_match_record.dart';
+import '../models/arena_opponent.dart';
+import '../models/arena_rank.dart';
 import '../models/crafting_recipe.dart';
 import '../models/equipment.dart';
 import '../models/equipment_affix.dart';
 import '../models/gem.dart';
 import '../models/player.dart';
 import '../models/prestige_node.dart';
+import '../models/season_pass.dart';
 import '../models/skill.dart';
 import '../models/stats.dart';
+import '../models/virtual_leaderboard.dart';
 import '../services/loot_service.dart';
 import '../services/save_service.dart';
 
@@ -18,6 +23,28 @@ class MilestoneRewardResult {
   final String message;
   final String? unlockedSkillName;
   MilestoneRewardResult({required this.message, this.unlockedSkillName});
+}
+
+class ArenaBattleEndResult {
+  final bool isWon;
+  final int apChange;
+  final int newAp;
+  final int earnedGold;
+  final int earnedDiamonds;
+  final String? droppedGem;
+  final bool triggeredStreakBonus;
+  final int currentStreak;
+
+  const ArenaBattleEndResult({
+    required this.isWon,
+    required this.apChange,
+    required this.newAp,
+    required this.earnedGold,
+    this.earnedDiamonds = 0,
+    this.droppedGem,
+    this.triggeredStreakBonus = false,
+    this.currentStreak = 0,
+  });
 }
 
 class PlayerNotifier extends Notifier<Player> {
@@ -1310,6 +1337,293 @@ class PlayerNotifier extends Notifier<Player> {
     );
     _save();
     return newItem;
+  }
+
+  /// Initialize Arena season & virtual leaderboard if first time
+  void initArenaIfNeeded() {
+    bool changed = false;
+    int seasonStart = state.seasonStartTimestamp;
+    int lastReset = state.lastSeasonResetTimestamp;
+    List<Map<String, dynamic>> lbData = state.virtualLeaderboardData;
+    int lastSimTime = state.lastLeaderboardSimTime;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (seasonStart == 0) {
+      seasonStart = now;
+      lastReset = now;
+      changed = true;
+    }
+
+    if (lbData.isEmpty) {
+      lbData = VirtualLeaderboard.generateInitialAiEntries()
+          .map((e) => e.toJson())
+          .toList();
+      lastSimTime = now;
+      changed = true;
+    } else {
+      // Simulate daily climbing if more than 24h passed
+      final daysPassed = ((now - lastSimTime) / (1000 * 60 * 60 * 24)).floor();
+      if (daysPassed >= 1) {
+        final currentEntries = lbData.map((e) => LeaderboardEntry.fromJson(e)).toList();
+        final updatedEntries = VirtualLeaderboard.simulateDailyClimbing(currentEntries, daysPassed: daysPassed);
+        lbData = updatedEntries.map((e) => e.toJson()).toList();
+        lastSimTime = now;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      state = state.copyWith(
+        seasonStartTimestamp: seasonStart,
+        lastSeasonResetTimestamp: lastReset,
+        virtualLeaderboardData: lbData,
+        lastLeaderboardSimTime: lastSimTime,
+      );
+      _save();
+    }
+  }
+
+  /// Process end of Arena match
+  ArenaBattleEndResult onArenaBattleEnd({
+    required bool isWon,
+    required ArenaOpponent opponent,
+  }) {
+    initArenaIfNeeded();
+
+    int apChange = 0;
+    int earnedGold = 0;
+    int earnedDiamonds = 0;
+    String? droppedGemKey;
+    bool streakBonus = false;
+    int newStreak = state.arenaWinStreak;
+    int newAp = state.arenaPoints;
+    int newSeasonAp = state.cumulativeSeasonAp;
+
+    final rng = Random();
+
+    if (isWon) {
+      newStreak += 1;
+      apChange = 1;
+      earnedGold = 200;
+
+      // 5-win streak bonus: +5 AP + 1 Diamond
+      if (newStreak % 5 == 0) {
+        apChange += 5;
+        earnedDiamonds += 1;
+        streakBonus = true;
+      }
+
+      newAp += apChange;
+      newSeasonAp += apChange;
+
+      // 10% chance to drop 1 random gem (Ruby, Sapphire, Emerald, Topaz, Amethyst lv 1)
+      if (rng.nextDouble() < 0.10) {
+        final gemTypes = ['ruby_1', 'sapphire_1', 'emerald_1', 'topaz_1', 'amethyst_1'];
+        droppedGemKey = gemTypes[rng.nextInt(gemTypes.length)];
+      }
+    } else {
+      newStreak = 0;
+      if (state.arenaPoints > 0) {
+        apChange = -1;
+        newAp = max(0, state.arenaPoints - 1);
+      } else {
+        apChange = 0;
+      }
+    }
+
+    // Update match history (keep last 10)
+    final newRecord = ArenaMatchRecord(
+      id: 'match_${DateTime.now().microsecondsSinceEpoch}',
+      opponentName: opponent.name,
+      opponentAvatar: opponent.avatarAsset,
+      isWin: isWon,
+      apChange: apChange,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final updatedHistory = [newRecord, ...state.arenaMatchHistory];
+    if (updatedHistory.length > 10) {
+      updatedHistory.removeRange(10, updatedHistory.length);
+    }
+
+    // Update highest arena tier
+    final currentTier = ArenaRankInfo.fromAp(newAp);
+    String highestTier = state.highestArenaTier;
+    if (currentTier.tier.index >=
+        (ArenaTier.values.firstWhere(
+            (t) => t.label == highestTier.split(' ').first,
+            orElse: () => ArenaTier.bronze).index)) {
+      highestTier = currentTier.displayName;
+    }
+
+    // Update gem inventory if gem dropped
+    Map<String, int> updatedGems = Map<String, int>.from(state.gemInventory);
+    if (droppedGemKey != null) {
+      updatedGems[droppedGemKey] = (updatedGems[droppedGemKey] ?? 0) + 1;
+    }
+
+    state = state.copyWith(
+      arenaPoints: newAp,
+      cumulativeSeasonAp: newSeasonAp,
+      arenaWinStreak: newStreak,
+      highestArenaTier: highestTier,
+      arenaMatchHistory: updatedHistory,
+      gold: state.gold + earnedGold,
+      gems: state.gems + earnedDiamonds,
+      gemInventory: updatedGems,
+    );
+    _save();
+
+    return ArenaBattleEndResult(
+      isWon: isWon,
+      apChange: apChange,
+      newAp: newAp,
+      earnedGold: earnedGold,
+      earnedDiamonds: earnedDiamonds,
+      droppedGem: droppedGemKey,
+      triggeredStreakBonus: streakBonus,
+      currentStreak: newStreak,
+    );
+  }
+
+  /// Claim a Season Pass milestone (1-30)
+  bool claimSeasonMilestone(int level) {
+    if (state.claimedSeasonMilestones.contains(level)) return false;
+
+    final allMilestones = SeasonMilestone.generateMilestones();
+    final milestone = allMilestones.firstWhere(
+      (m) => m.level == level,
+      orElse: () => allMilestones.first,
+    );
+
+    if (state.cumulativeSeasonAp < milestone.requiredAp) {
+      return false;
+    }
+
+    final updatedClaimed = List<int>.from(state.claimedSeasonMilestones)..add(level);
+    int newGold = state.gold + milestone.goldReward;
+    int newGems = state.gems + milestone.diamondReward;
+
+    Map<String, int> updatedGemInv = Map<String, int>.from(state.gemInventory);
+    if (milestone.gemReward != null) {
+      updatedGemInv[milestone.gemReward!] = (updatedGemInv[milestone.gemReward!] ?? 0) + 1;
+    }
+
+    List<Equipment> newInv = List<Equipment>.from(state.inventory);
+    if (milestone.equipmentRarity != null) {
+      final rng = Random();
+      final slots = [EquipmentSlot.weapon, EquipmentSlot.armor, EquipmentSlot.accessory];
+      final slot = slots[rng.nextInt(slots.length)];
+
+      if (milestone.equipmentRarity == 'set_piece') {
+        final setIds = ['viem_long', 'han_bang', 'loi_dinh', 'huyet_ma'];
+        final setId = setIds[rng.nextInt(setIds.length)];
+        final setNames = {
+          'viem_long': 'Viêm Long',
+          'han_bang': 'Hàn Băng',
+          'loi_dinh': 'Lôi Đình',
+          'huyet_ma': 'Huyết Ma',
+        };
+        final slotNames = {
+          EquipmentSlot.weapon: 'Thần Kiếm',
+          EquipmentSlot.armor: 'Chiến Giáp',
+          EquipmentSlot.accessory: 'Hộ Phù',
+        };
+        newInv.add(Equipment(
+          id: 'season_set_${DateTime.now().microsecondsSinceEpoch}',
+          name: '${setNames[setId]} ${slotNames[slot]}',
+          description: 'Trang bị Bộ Hoàng Kim ban thưởng từ Đỉnh Phong Mùa Đấu Trường.',
+          slot: slot,
+          rarity: EquipmentRarity.legendary,
+          setId: setId,
+          flatAtk: slot == EquipmentSlot.weapon ? 90 : 0,
+          flatDef: slot == EquipmentSlot.armor ? 35 : 0,
+          flatHp: slot == EquipmentSlot.armor ? 650 : 0,
+          critRate: slot == EquipmentSlot.accessory ? 0.12 : 0.0,
+          manaRegen: slot == EquipmentSlot.accessory ? 3.0 : 0.0,
+          affixes: LootService.rollAffixesForRarity(EquipmentRarity.legendary),
+          bonusSockets: 1,
+        ));
+      } else {
+        final rarity = milestone.equipmentRarity == 'epic'
+            ? EquipmentRarity.epic
+            : EquipmentRarity.rare;
+        newInv.add(Equipment(
+          id: 'season_gear_${DateTime.now().microsecondsSinceEpoch}',
+          name:
+              'Vinh Quang Mùa ${slot == EquipmentSlot.weapon ? "Kiếm" : (slot == EquipmentSlot.armor ? "Giáp" : "Nhẫn")}',
+          description: 'Phần thưởng vinh dự từ Đấu Trường Season Pass.',
+          slot: slot,
+          rarity: rarity,
+          flatAtk: slot == EquipmentSlot.weapon ? 45 : 0,
+          flatDef: slot == EquipmentSlot.armor ? 20 : 0,
+          flatHp: slot == EquipmentSlot.armor ? 300 : 0,
+          critRate: slot == EquipmentSlot.accessory ? 0.08 : 0.0,
+          manaRegen: slot == EquipmentSlot.accessory ? 2.0 : 0.0,
+          affixes: LootService.rollAffixesForRarity(rarity),
+        ));
+      }
+    }
+
+    state = state.copyWith(
+      claimedSeasonMilestones: updatedClaimed,
+      gold: newGold,
+      gems: newGems,
+      gemInventory: updatedGemInv,
+      inventory: newInv,
+    );
+    _save();
+    return true;
+  }
+
+  /// Claim weekly rank tier rewards and reset AP
+  TierReward? claimWeeklyRankReward() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final sevenDays = 7 * 24 * 60 * 60 * 1000;
+    if (state.lastSeasonResetTimestamp > 0 && now - state.lastSeasonResetTimestamp < sevenDays) {
+      return null;
+    }
+
+    final currentRank = ArenaRankInfo.fromAp(state.arenaPoints);
+    final reward = TierReward.forTier(currentRank.tier);
+
+    Map<String, int> updatedGems = Map<String, int>.from(state.gemInventory);
+    if (reward.gemReward != null) {
+      updatedGems[reward.gemReward!] = (updatedGems[reward.gemReward!] ?? 0) + 1;
+    }
+
+    state = state.copyWith(
+      gold: state.gold + reward.gold,
+      gems: state.gems + reward.gems,
+      gemInventory: updatedGems,
+      arenaPoints: 0,
+      lastSeasonResetTimestamp: now,
+      title: reward.title ?? state.title,
+    );
+    _save();
+    return reward;
+  }
+
+  /// Retrieves combined sorted leaderboard entries
+  List<LeaderboardEntry> getLeaderboardEntries() {
+    initArenaIfNeeded();
+
+    final aiEntries = state.virtualLeaderboardData
+        .map((e) => LeaderboardEntry.fromJson(e))
+        .toList();
+
+    final playerEntry = LeaderboardEntry(
+      id: 'player_me',
+      name: state.name.isNotEmpty ? state.name : 'Bạn',
+      title: state.title,
+      avatarAsset: state.portraitAsset,
+      ap: state.arenaPoints,
+      isPlayer: true,
+    );
+
+    final combined = [...aiEntries, playerEntry];
+    combined.sort((a, b) => b.ap.compareTo(a.ap));
+    return combined;
   }
 
   /// Selects zone and stage to challenge

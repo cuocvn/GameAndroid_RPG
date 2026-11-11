@@ -189,6 +189,49 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
   - 3 Epic $\rightarrow$ 1 Legendary (3000 vàng, 30% tỉ lệ thành công, thất bại giữ lại 1 món Epic).
 - Tiện ích QoL: **"Tự động chọn 3 món rác thấp nhất"** giúp người chơi dọn kho đồ nhanh chóng.
 
+### 2.12. Hệ Thống Đấu Trường PvP Giả Lập (Offline Simulated Arena)
+- **Cơ chế Matchmaking theo khung Level (Power Brackets)**:
+  - Hoạt động 100% offline không cần server: Hệ thống tự động khởi tạo đối thủ AI dựa trên chỉ số thực tế của người chơi.
+  - *Lv 10-15*: Lực chiến đối thủ $\approx 90\% - 110\%$ người chơi, trang bị bậc Rare.
+  - *Lv 16-25*: Lực chiến đối thủ $\approx 100\% - 120\%$, trang bị bậc Epic.
+  - *Lv 26+*: Lực chiến đối thủ $\approx 110\% - 140\%$, trang bị bậc Legendary.
+  - Đối thủ AI sở hữu phân bổ chỉ số ngẫu nhiên theo các trường phái (Chiến Binh, Pháp Sư, Sát Thủ, Hộ Vệ), sở hữu thanh Mana riêng và trang bị 3-5 chiêu thức chủ động.
+- **Quy tắc Chiến đấu & Phần thưởng**:
+  - Hai nhân vật giao tranh tự động đối xứng, sử dụng mana thi triển kỹ năng.
+  - *Thắng trận*: $+1$ Điểm Đấu Trường (AP) + 200 Vàng + 10% cơ hội rơi Ngọc ngẫu nhiên.
+  - *Thua trận*: $-1$ AP (tối thiểu 0 AP, không âm), không mất vàng.
+  - *Chuỗi Thắng (Streak Bonus)*: Mỗi 5 trận thắng liên tiếp thưởng thêm $+5$ AP và $+1$ 💎.
+  - Tách biệt hoàn toàn với tiến trình đi ải chiến dịch (không ảnh hưởng tới mốc map hay Endless Tower).
+  - Lưu trữ lịch sử 10 trận đấu gần nhất trực quan.
+
+### 2.13. Hệ Thống Phân Hạng Rank Tier & MMR
+- **7 Bậc Hạng (Tiers) dựa trên Điểm AP**:
+  - 🥉 **Đồng**: 0 - 99 AP (Đồng III: 0-32, Đồng II: 33-65, Đồng I: 66-99).
+  - 🥈 **Bạc**: 100 - 249 AP (Bạc III: 100-149, Bạc II: 150-199, Bạc I: 200-249).
+  - 🥇 **Vàng**: 250 - 499 AP (Vàng III: 250-332, Vàng II: 333-415, Vàng I: 416-499).
+  - 💎 **Bạch Kim**: 500 - 999 AP (Bạch Kim III, II, I).
+  - 💠 **Kim Cương**: 1000 - 1999 AP (Kim Cương III, II, I).
+  - 🔮 **Tinh Anh**: 2000 - 3499 AP (Tinh Anh III, II, I).
+  - 👑 **Cao Thủ**: 3500+ AP (Bậc tối thượng, không phân nhánh phụ).
+- Huy hiệu Rank hiển thị trực tiếp với màu sắc đặc trưng tại màn hình Home.
+- **Phần Thưởng Mùa 7 Ngày**:
+  - Hàng tuần cho phép tổng kết nhận quà theo bậc: từ 500 Vàng (Đồng) đến 20,000 Vàng + 50 💎 + Ngọc Cấp 5 + Danh hiệu độc quyền *"Cao Thủ Vô Song"*.
+
+### 2.14. Bảng Xếp Hạng Giả Lập Cạnh Tranh (Virtual Leaderboard)
+- Mô phỏng 30 cao thủ ảo với tên tuổi kiếm hiệp huyền thoại (Độc Cô Cầu Bại, Tây Môn Xuy Tuyết, Tiêu Phong, Dương Quá...).
+- Điểm AP của các đối thủ dao động từ 2,000 đến 8,000 AP và tự động gia tăng nhẹ sau mỗi ngày để mô phỏng "người chơi khác cũng đang leo rank".
+- Vị trí của người chơi được chèn theo thời gian thực dựa vào AP hiện tại.
+- Top 3 nhận hiệu ứng hào quang Vàng / Bạc / Đồng. Nếu người chơi ngoài Top 10, thanh trạng thái ghim cố định bên dưới sẽ luôn hiển thị vị trí chính xác của người chơi.
+
+### 2.15. Vé Mùa Đấu Trường (Offline Season Pass)
+- Mùa giải kéo dài **30 ngày** (tính từ thời điểm người chơi mở Đấu Trường lần đầu).
+- Tiến trình tích lũy bằng **Tổng AP Tích Lũy Mùa** (Cứ mỗi 100 AP mở khóa 1 Mốc, tối đa 3,000 AP cho Mốc 30).
+- **30 Mốc Phần Thưởng Đẳng Cấp**:
+  - *Mốc 1-10*: Vàng + Kim Cương tăng tiến.
+  - *Mốc 11-20*: Ngọc Cấp 2-3 + Trang bị Rare.
+  - *Mốc 21-29*: Ngọc Cấp 4 + Trang bị Epic.
+  - *Mốc 30 (Đỉnh Phong Mùa)*: 1 Ngọc Cấp 5 + 50 💎 + 1 Mảnh Set Hoàng Kim huyền thoại ngẫu nhiên.
+
 ---
 
 ## 3. Hướng Dẫn Chạy & Kiểm Thử
@@ -197,7 +240,7 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
 ```bash
 flutter test
 ```
-Tất cả 20/20 tests được đảm bảo 100% Pass:
+Tất cả 23/23 tests được đảm bảo 100% Pass:
 - Baseline Vùng 1 quái thường làm mất $\ge 40\%$ HP nếu build sai.
 - Boss Vùng 1 đánh bại người chơi chưa nâng cấp.
 - Pure INT thất bại ở Vùng 3 do Kháng Phép 40%.
@@ -213,6 +256,9 @@ Tất cả 20/20 tests được đảm bảo 100% Pass:
 - Hệ thống Chế Tạo (Mở khóa công thức, trừ nguyên liệu, chế tạo đồ và Set item).
 - Hệ thống Reforge (Đổi dòng ngẫu nhiên không trùng lặp, trừ tài nguyên và cập nhật chỉ số).
 - Hệ thống Transmute (Ghép 3 món cùng bậc thành bậc cao hơn, kiểm tra thất bại & validate input).
+- Tính toán Bậc Hạng Đấu Trường (Arena Rank Tiers & Sub-ranks I, II, III).
+- Matchmaking theo khung Level (Power brackets 90-110%, 100-120%, 110-140%).
+- Tiến trình Vé Mùa Season Pass (30 Mốc, chuỗi 5 trận thắng thưởng thêm, nhận thưởng tích lũy).
 
 ### Chạy Ứng Dụng Trên Android Emulator hoặc Thiết Bị Thật
 ```bash

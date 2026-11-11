@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_enemies.dart';
 import '../data/seed_skills.dart';
+import '../models/arena_opponent.dart';
+import '../models/arena_rank.dart';
 import '../models/battle_state.dart';
 import '../models/enemy.dart';
 import '../models/equipment.dart';
@@ -22,12 +24,16 @@ class BattleScreen extends ConsumerStatefulWidget {
   final int zoneId;
   final int stage;
   final bool isEndless;
+  final bool isArena;
+  final ArenaOpponent? arenaOpponent;
 
   const BattleScreen({
     super.key,
     required this.zoneId,
     required this.stage,
     this.isEndless = false,
+    this.isArena = false,
+    this.arenaOpponent,
   });
 
   @override
@@ -72,7 +78,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _dialogShown = false;
     _milestoneResult = null;
     final player = ref.read(playerProvider);
-    if (widget.isEndless || _currentZoneId == 99) {
+    if (widget.isArena && widget.arenaOpponent != null) {
+      _enemy = widget.arenaOpponent!.toEnemy();
+    } else if (widget.isEndless || _currentZoneId == 99) {
       _enemy = SeedEnemies.generateEndlessEnemy(_currentStage);
     } else {
       _enemy = SeedEnemies.getEnemy(_currentZoneId, _currentStage);
@@ -107,6 +115,15 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
 
     final player = ref.read(playerProvider);
 
+    if (widget.isArena && widget.arenaOpponent != null) {
+      final arenaResult = ref.read(playerProvider.notifier).onArenaBattleEnd(
+            isWon: state.isWon,
+            opponent: widget.arenaOpponent!,
+          );
+      await _showArenaResultDialog(state: state, result: arenaResult);
+      return;
+    }
+
     if (state.isWon) {
       _milestoneResult = ref.read(playerProvider.notifier).onBattleVictory(
             exp: state.earnedExp,
@@ -134,19 +151,28 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final state = _currentState;
-    final zone = (widget.isEndless || _currentZoneId == 99)
+    final zone = widget.isArena
         ? const ZoneInfo(
-            id: 99,
-            name: 'Tháp Vô Tận',
-            description: 'Vực thẳm vô tận khiêu chiến cực hạn sức mạnh.',
-            iconEmoji: '🌀',
-            bgAsset: 'assets/img/characters/012_Seraphina_JUNG.jpg',
-            stageCount: 100,
+            id: 98,
+            name: 'Đấu Trường PvP',
+            description: 'Đỉnh phong quyết đấu đối thủ giả lập.',
+            iconEmoji: '⚔️',
+            bgAsset: 'assets/img/characters/004_Kaelen_TOP.jpg',
+            stageCount: 1,
           )
-        : SeedEnemies.zones.firstWhere(
-            (z) => z.id == _currentZoneId,
-            orElse: () => SeedEnemies.zones.first,
-          );
+        : ((widget.isEndless || _currentZoneId == 99)
+            ? const ZoneInfo(
+                id: 99,
+                name: 'Tháp Vô Tận',
+                description: 'Vực thẳm vô tận khiêu chiến cực hạn sức mạnh.',
+                iconEmoji: '🌀',
+                bgAsset: 'assets/img/characters/012_Seraphina_JUNG.jpg',
+                stageCount: 100,
+              )
+            : SeedEnemies.zones.firstWhere(
+                (z) => z.id == _currentZoneId,
+                orElse: () => SeedEnemies.zones.first,
+              ));
 
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
@@ -569,8 +595,14 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                   isHero: false,
                 ),
                 const SizedBox(height: 3),
-                // Status burn tag or spacer
-                if (state.enemy.burnTicksLeft > 0)
+                if (state.enemy.maxMana > 0)
+                  ManaBar(
+                    currentMana: state.enemy.currentMana,
+                    maxMana: state.enemy.maxMana,
+                    height: 9,
+                    showText: false,
+                  )
+                else if (state.enemy.burnTicksLeft > 0)
                   Text(
                     '🔥 Thiêu đốt (${state.enemy.burnTicksLeft}s)',
                     style: const TextStyle(
@@ -1280,6 +1312,192 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
         Navigator.pop(context);
       }
     }
+  }
+
+  Future<void> _showArenaResultDialog({
+    required BattleState state,
+    required ArenaBattleEndResult result,
+  }) async {
+    final rankInfo = ArenaRankInfo.fromAp(result.newAp);
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: result.isWon
+                    ? [const Color(0xFF1F2B1A), const Color(0xFF0F1510)]
+                    : [const Color(0xFF2C1417), const Color(0xFF140B0D)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: result.isWon ? AppTheme.greenAccent : AppTheme.redAccent,
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (result.isWon ? AppTheme.greenAccent : AppTheme.redAccent).withOpacity(0.4),
+                  blurRadius: 18,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  result.isWon ? '🏆 CHIẾN THẮNG ĐẤU TRƯỜNG!' : '💀 BẠI TRẬN!',
+                  style: GoogleFonts.cinzel(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: result.isWon ? AppTheme.goldAccent : AppTheme.redAccent,
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: result.apChange >= 0 ? Colors.greenAccent : Colors.redAccent,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        result.apChange >= 0 ? '+${result.apChange} AP' : '${result.apChange} AP',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: result.apChange >= 0 ? Colors.greenAccent : Colors.redAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '(Hiện tại: ${result.newAp} AP)',
+                        style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(rankInfo.tier.icon, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Bậc Hạng: ${rankInfo.displayName}',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: rankInfo.tier.color,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                if (result.isWon) ...[
+                  if (result.triggeredStreakBonus)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber),
+                      ),
+                      child: Text(
+                        '🔥 CHUỖI 5 THẮNG: +5 AP THÊM & +1 💎!',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '+${result.earnedGold} 🪙',
+                        style: const TextStyle(
+                          color: AppTheme.goldAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (result.earnedDiamonds > 0) ...[
+                        const SizedBox(width: 10),
+                        Text(
+                          '+${result.earnedDiamonds} 💎',
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (result.droppedGem != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '🎁 Rơi Ngọc: ${result.droppedGem}!',
+                        style: const TextStyle(
+                          color: Colors.purpleAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: result.isWon ? Colors.green.shade800 : Colors.red.shade900,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.pop(context);
+                    },
+                    child: Text(
+                      'RỜI ĐẤU TRƯỜNG',
+                      style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _checkPostBattleTutorials(bool isWon, bool hasDrops) async {

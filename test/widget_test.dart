@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:game_and/models/arena_opponent.dart';
+import 'package:game_and/models/arena_rank.dart';
 import 'package:game_and/models/crafting_recipe.dart';
 import 'package:game_and/models/equipment.dart';
 import 'package:game_and/models/equipment_affix.dart';
 import 'package:game_and/models/gem.dart';
 import 'package:game_and/models/player.dart';
+import 'package:game_and/models/season_pass.dart';
 import 'package:game_and/models/stats.dart';
 import 'package:game_and/models/skill.dart';
 import 'package:game_and/data/seed_equipment.dart';
@@ -548,5 +551,164 @@ void main() {
       ),
     );
     expect(notifier.transmuteEquipment(['c_1', 'c_2', 'r_1']), isNull);
+  });
+
+  test('Arena PvP: Tier and Sub-rank calculation based on AP', () {
+    // 0 AP -> Đồng III
+    final r0 = ArenaRankInfo.fromAp(0);
+    expect(r0.tier, ArenaTier.bronze);
+    expect(r0.subRank, 3);
+    expect(r0.displayName, 'Đồng III');
+
+    // 50 AP -> Đồng II
+    final r50 = ArenaRankInfo.fromAp(50);
+    expect(r50.tier, ArenaTier.bronze);
+    expect(r50.subRank, 2);
+    expect(r50.displayName, 'Đồng II');
+
+    // 80 AP -> Đồng I
+    final r80 = ArenaRankInfo.fromAp(80);
+    expect(r80.tier, ArenaTier.bronze);
+    expect(r80.subRank, 1);
+    expect(r80.displayName, 'Đồng I');
+
+    // 120 AP -> Bạc III
+    final r120 = ArenaRankInfo.fromAp(120);
+    expect(r120.tier, ArenaTier.silver);
+    expect(r120.subRank, 3);
+    expect(r120.displayName, 'Bạc III');
+
+    // 350 AP -> Vàng II
+    final r350 = ArenaRankInfo.fromAp(350);
+    expect(r350.tier, ArenaTier.gold);
+    expect(r350.subRank, 2);
+    expect(r350.displayName, 'Vàng II');
+
+    // 700 AP -> Bạch Kim II
+    final r700 = ArenaRankInfo.fromAp(700);
+    expect(r700.tier, ArenaTier.platinum);
+    expect(r700.subRank, 2);
+
+    // 1500 AP -> Kim Cương II
+    final r1500 = ArenaRankInfo.fromAp(1500);
+    expect(r1500.tier, ArenaTier.diamond);
+    expect(r1500.subRank, 2);
+
+    // 2500 AP -> Tinh Anh II
+    final r2500 = ArenaRankInfo.fromAp(2500);
+    expect(r2500.tier, ArenaTier.master);
+    expect(r2500.subRank, 2);
+
+    // 3600 AP -> Cao Thủ (no subrank)
+    final r3600 = ArenaRankInfo.fromAp(3600);
+    expect(r3600.tier, ArenaTier.grandmaster);
+    expect(r3600.subRank, 0);
+    expect(r3600.displayName, 'Cao Thủ');
+
+    // Negative AP clamped to 0
+    final rNeg = ArenaRankInfo.fromAp(-50);
+    expect(rNeg.tier, ArenaTier.bronze);
+    expect(rNeg.currentAp, 0);
+  });
+
+  test('Arena PvP: Matchmaking power bracket scaling by player level', () {
+    // 1. Bracket Lv 10-15: Power ~ 90-110% of player
+    const playerLv12 = Player(level: 12);
+    final p12Power = playerLv12.combatPower;
+    for (int i = 0; i < 10; i++) {
+      final opp = ArenaOpponent.generate(player: playerLv12);
+      expect(opp.totalPower, greaterThanOrEqualTo((p12Power * 0.70).round()));
+      expect(opp.totalPower, lessThanOrEqualTo((p12Power * 1.30).round()));
+      expect(opp.skillIds.length, inInclusiveRange(3, 5));
+      expect(opp.gearRarity, EquipmentRarity.rare);
+    }
+
+    // 2. Bracket Lv 16-25: Power ~ 100-120% of player
+    const playerLv20 = Player(level: 20);
+    final p20Power = playerLv20.combatPower;
+    final opp20 = ArenaOpponent.generate(player: playerLv20);
+    expect(opp20.totalPower, greaterThanOrEqualTo((p20Power * 0.85).round()));
+    expect(opp20.gearRarity, EquipmentRarity.epic);
+
+    // 3. Bracket Lv 26+: Power ~ 110-140% of player
+    const playerLv30 = Player(level: 30);
+    final p30Power = playerLv30.combatPower;
+    final opp30 = ArenaOpponent.generate(player: playerLv30);
+    expect(opp30.totalPower, greaterThanOrEqualTo(p30Power));
+    expect(opp30.gearRarity, EquipmentRarity.legendary);
+
+    // 4. Opponent converts to Enemy with boss skills and mana
+    final enemy = opp30.toEnemy();
+    expect(enemy.maxHp, opp30.hp);
+    expect(enemy.bossSkills.length, opp30.skillIds.length);
+    expect(enemy.maxMana, 100);
+    expect(enemy.currentMana, 100);
+  });
+
+  test('Arena PvP: Season Pass cumulative AP progression, milestones claim, and win streak bonus', () {
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              arenaPoints: 10,
+              cumulativeSeasonAp: 90,
+              arenaWinStreak: 4, // 4 wins -> next win is 5th win!
+              gold: 100,
+              gems: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final dummyOpponent = ArenaOpponent.generate(player: container.read(playerProvider));
+
+    // 1. 5th Win triggers Win Streak Bonus: +1 regular + 5 streak = +6 AP and +1 💎, +200 gold
+    final winResult = notifier.onArenaBattleEnd(isWon: true, opponent: dummyOpponent);
+    expect(winResult.isWon, true);
+    expect(winResult.triggeredStreakBonus, true);
+    expect(winResult.apChange, 6);
+    expect(winResult.earnedGold, 200);
+    expect(winResult.earnedDiamonds, 1);
+    expect(container.read(playerProvider).arenaPoints, 16);
+    expect(container.read(playerProvider).cumulativeSeasonAp, 96);
+    expect(container.read(playerProvider).arenaWinStreak, 5);
+    expect(container.read(playerProvider).gold, 300);
+    expect(container.read(playerProvider).gems, 1);
+    expect(container.read(playerProvider).arenaMatchHistory.length, 1);
+
+    // 2. Defeat: loses 1 AP, resets streak, no gold lost
+    final lossResult = notifier.onArenaBattleEnd(isWon: false, opponent: dummyOpponent);
+    expect(lossResult.isWon, false);
+    expect(lossResult.apChange, -1);
+    expect(container.read(playerProvider).arenaPoints, 15);
+    expect(container.read(playerProvider).arenaWinStreak, 0);
+    expect(container.read(playerProvider).gold, 300); // no gold lost
+    expect(container.read(playerProvider).arenaMatchHistory.length, 2);
+
+    // 3. Season Pass Milestones: exactly 30 milestones
+    final milestones = SeasonMilestone.generateMilestones();
+    expect(milestones.length, 30);
+    expect(milestones.first.level, 1);
+    expect(milestones.first.requiredAp, 100);
+    expect(milestones.last.level, 30);
+    expect(milestones.last.requiredAp, 3000);
+    expect(milestones.last.equipmentRarity, 'set_piece');
+
+    // Player with 96 cumulative AP cannot claim milestone 1 (requires 100)
+    expect(notifier.claimSeasonMilestone(1), false);
+
+    // Boost cumulative AP to 120 -> can claim milestone 1
+    notifier.setPlayer(container.read(playerProvider).copyWith(cumulativeSeasonAp: 120));
+    final claimSuccess = notifier.claimSeasonMilestone(1);
+    expect(claimSuccess, true);
+    expect(container.read(playerProvider).claimedSeasonMilestones.contains(1), true);
+    expect(container.read(playerProvider).gold, greaterThan(300)); // Received milestone gold
+
+    // Cannot claim already claimed milestone again
+    expect(notifier.claimSeasonMilestone(1), false);
   });
 }

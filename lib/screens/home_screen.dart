@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
+import '../models/arena_rank.dart';
 import '../models/player.dart';
 import '../providers/game_providers.dart';
 import '../theme/app_theme.dart';
+import 'arena_screen.dart';
 import 'battle_screen.dart';
 import 'build_screen.dart';
 import 'crafting_screen.dart';
@@ -917,6 +919,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   ),
                                 ),
                               ],
+                              // Arena Tier Badge
+                              Builder(
+                                builder: (ctx) {
+                                  final rankInfo = ArenaRankInfo.fromAp(player.arenaPoints);
+                                  return Tooltip(
+                                    message: 'Đấu Trường PvP: ${rankInfo.displayName} (${player.arenaPoints} AP)',
+                                    child: Container(
+                                      margin: const EdgeInsets.only(left: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: rankInfo.tier.color.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: rankInfo.tier.color, width: 1),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(rankInfo.tier.icon, style: const TextStyle(fontSize: 10)),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            rankInfo.displayName,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 9.5,
+                                              color: rankInfo.tier.color,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                               const SizedBox(width: 8),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1465,6 +1500,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         },
                       ),
 
+                      // Arena PvP Icon
+                      _buildBottomNavButton(
+                        icon: Icons.sports_kabaddi,
+                        label: 'Đấu Trường',
+                        isUnlocked: player.level >= 10 || player.highestEndlessFloor >= 5,
+                        unlockReqText: 'Mở khóa ở Lv.10 hoặc Tháp F5',
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (ctx) => const ArenaScreen()),
+                          );
+                        },
+                      ),
+
                       // Map Icon
                       _buildBottomNavButton(
                         icon: Icons.map,
@@ -1625,7 +1675,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               );
             },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

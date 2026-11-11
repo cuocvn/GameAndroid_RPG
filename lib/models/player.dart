@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../data/asset_mapping.dart';
+import 'arena_match_record.dart';
 import 'equipment.dart';
 import 'stats.dart';
 
@@ -62,6 +63,18 @@ class Player {
   final Map<String, int> craftingMaterials; // 'iron', 'crystal', 'steel', 'essence' -> count
   final List<String> craftedRecipeIds; // list of recipe IDs that have been crafted
 
+  // Arena & PvP System
+  final int arenaPoints;
+  final int cumulativeSeasonAp;
+  final String highestArenaTier;
+  final int arenaWinStreak;
+  final List<ArenaMatchRecord> arenaMatchHistory;
+  final List<int> claimedSeasonMilestones;
+  final int seasonStartTimestamp;
+  final int lastSeasonResetTimestamp;
+  final List<Map<String, dynamic>> virtualLeaderboardData;
+  final int lastLeaderboardSimTime;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -111,6 +124,16 @@ class Player {
       'essence': 0,
     },
     this.craftedRecipeIds = const [],
+    this.arenaPoints = 0,
+    this.cumulativeSeasonAp = 0,
+    this.highestArenaTier = 'Đồng III',
+    this.arenaWinStreak = 0,
+    this.arenaMatchHistory = const [],
+    this.claimedSeasonMilestones = const [],
+    this.seasonStartTimestamp = 0,
+    this.lastSeasonResetTimestamp = 0,
+    this.virtualLeaderboardData = const [],
+    this.lastLeaderboardSimTime = 0,
   });
 
   /// Required EXP to level up
@@ -300,6 +323,10 @@ class Player {
     return min(6, slots);
   }
 
+  /// Total combat power rating
+  int get combatPower =>
+      (maxHp ~/ 5) + ((physicalAtk + magicAtk) * 1.8).round() + (physicalDef * 3).round();
+
   /// Active equipment set counts: setId -> count of equipped items (0 to 3)
   Map<String, int> get activeSetCounts {
     final counts = <String, int>{};
@@ -383,6 +410,16 @@ class Player {
     Map<String, int>? gemInventory,
     Map<String, int>? craftingMaterials,
     List<String>? craftedRecipeIds,
+    int? arenaPoints,
+    int? cumulativeSeasonAp,
+    String? highestArenaTier,
+    int? arenaWinStreak,
+    List<ArenaMatchRecord>? arenaMatchHistory,
+    List<int>? claimedSeasonMilestones,
+    int? seasonStartTimestamp,
+    int? lastSeasonResetTimestamp,
+    List<Map<String, dynamic>>? virtualLeaderboardData,
+    int? lastLeaderboardSimTime,
   }) {
     return Player(
       name: name ?? this.name,
@@ -421,6 +458,16 @@ class Player {
       gemInventory: gemInventory ?? this.gemInventory,
       craftingMaterials: craftingMaterials ?? this.craftingMaterials,
       craftedRecipeIds: craftedRecipeIds ?? this.craftedRecipeIds,
+      arenaPoints: arenaPoints ?? this.arenaPoints,
+      cumulativeSeasonAp: cumulativeSeasonAp ?? this.cumulativeSeasonAp,
+      highestArenaTier: highestArenaTier ?? this.highestArenaTier,
+      arenaWinStreak: arenaWinStreak ?? this.arenaWinStreak,
+      arenaMatchHistory: arenaMatchHistory ?? this.arenaMatchHistory,
+      claimedSeasonMilestones: claimedSeasonMilestones ?? this.claimedSeasonMilestones,
+      seasonStartTimestamp: seasonStartTimestamp ?? this.seasonStartTimestamp,
+      lastSeasonResetTimestamp: lastSeasonResetTimestamp ?? this.lastSeasonResetTimestamp,
+      virtualLeaderboardData: virtualLeaderboardData ?? this.virtualLeaderboardData,
+      lastLeaderboardSimTime: lastLeaderboardSimTime ?? this.lastLeaderboardSimTime,
     );
   }
 
@@ -460,6 +507,16 @@ class Player {
         'gemInventory': gemInventory,
         'craftingMaterials': craftingMaterials,
         'craftedRecipeIds': craftedRecipeIds,
+        'arenaPoints': arenaPoints,
+        'cumulativeSeasonAp': cumulativeSeasonAp,
+        'highestArenaTier': highestArenaTier,
+        'arenaWinStreak': arenaWinStreak,
+        'arenaMatchHistory': arenaMatchHistory.map((e) => e.toJson()).toList(),
+        'claimedSeasonMilestones': claimedSeasonMilestones,
+        'seasonStartTimestamp': seasonStartTimestamp,
+        'lastSeasonResetTimestamp': lastSeasonResetTimestamp,
+        'virtualLeaderboardData': virtualLeaderboardData,
+        'lastLeaderboardSimTime': lastLeaderboardSimTime,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -538,5 +595,24 @@ class Player {
                 ?.map((e) => e as String)
                 .toList() ??
             const [],
+        arenaPoints: json['arenaPoints'] as int? ?? 0,
+        cumulativeSeasonAp: json['cumulativeSeasonAp'] as int? ?? 0,
+        highestArenaTier: json['highestArenaTier'] as String? ?? 'Đồng III',
+        arenaWinStreak: json['arenaWinStreak'] as int? ?? 0,
+        arenaMatchHistory: (json['arenaMatchHistory'] as List<dynamic>?)
+                ?.map((e) => ArenaMatchRecord.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        claimedSeasonMilestones: (json['claimedSeasonMilestones'] as List<dynamic>?)
+                ?.map((e) => e as int)
+                .toList() ??
+            const [],
+        seasonStartTimestamp: json['seasonStartTimestamp'] as int? ?? 0,
+        lastSeasonResetTimestamp: json['lastSeasonResetTimestamp'] as int? ?? 0,
+        virtualLeaderboardData: (json['virtualLeaderboardData'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e as Map))
+                .toList() ??
+            const [],
+        lastLeaderboardSimTime: json['lastLeaderboardSimTime'] as int? ?? 0,
       );
 }

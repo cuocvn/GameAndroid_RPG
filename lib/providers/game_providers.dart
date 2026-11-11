@@ -6,12 +6,15 @@ import '../data/seed_skills.dart';
 import '../models/arena_match_record.dart';
 import '../models/arena_opponent.dart';
 import '../models/arena_rank.dart';
+import '../models/companion.dart';
 import '../models/crafting_recipe.dart';
 import '../models/equipment.dart';
 import '../models/equipment_affix.dart';
 import '../models/gem.dart';
+import '../models/hero_story.dart';
 import '../models/player.dart';
 import '../models/prestige_node.dart';
+import '../models/raid_boss.dart';
 import '../models/season_pass.dart';
 import '../models/skill.dart';
 import '../models/stats.dart';
@@ -79,11 +82,28 @@ class PlayerNotifier extends Notifier<Player> {
   }
 
   /// Change character portrait / appearance and name
-  void changePortrait(String portraitAsset, {String? name, String? title}) {
+  void changePortrait(String portraitAsset, {String? name, String? title, String? heroId}) {
+    String resolvedHeroId = heroId ?? state.currentHeroId;
+    if (heroId == null) {
+      for (final story in HeroStory.allStories) {
+        if (story.avatarAsset == portraitAsset) {
+          resolvedHeroId = story.heroId;
+          break;
+        }
+      }
+    }
+
+    final updatedHeroProgress = Map<String, int>.from(state.heroLevelProgress);
+    if (!updatedHeroProgress.containsKey(resolvedHeroId)) {
+      updatedHeroProgress[resolvedHeroId] = state.level;
+    }
+
     state = state.copyWith(
       portraitAsset: portraitAsset,
       name: name ?? state.name,
       title: title ?? state.title,
+      currentHeroId: resolvedHeroId,
+      heroLevelProgress: updatedHeroProgress,
     );
     _save();
   }
@@ -646,6 +666,27 @@ class PlayerNotifier extends Notifier<Player> {
       updatedMaterials[entry.key] = (updatedMaterials[entry.key] ?? 0) + entry.value;
     }
 
+    // Companion Food Drops (35% meat, 25% herb, 30% beast_stone if boss or zone >= 3)
+    final updatedPetFoods = Map<String, int>.from(state.petFoods);
+    final rng = Random();
+    if (rng.nextDouble() < 0.35) {
+      final meatCount = 1 + rng.nextInt(2);
+      updatedPetFoods['meat'] = (updatedPetFoods['meat'] ?? 0) + meatCount;
+    }
+    if (rng.nextDouble() < 0.25) {
+      final herbCount = 1 + rng.nextInt(2);
+      updatedPetFoods['herb'] = (updatedPetFoods['herb'] ?? 0) + herbCount;
+    }
+    if ((isBoss || foughtZone >= 3) && rng.nextDouble() < 0.30) {
+      updatedPetFoods['beast_stone'] = (updatedPetFoods['beast_stone'] ?? 0) + 1;
+    }
+
+    // Update hero story progress level
+    final updatedHeroProgress = Map<String, int>.from(state.heroLevelProgress);
+    if (newLevel > (updatedHeroProgress[state.currentHeroId] ?? 0)) {
+      updatedHeroProgress[state.currentHeroId] = newLevel;
+    }
+
     state = state.copyWith(
       level: newLevel,
       currentExp: newExp,
@@ -660,6 +701,8 @@ class PlayerNotifier extends Notifier<Player> {
       highestEndlessFloor: newHighestEndless,
       gemInventory: updatedGemInv,
       craftingMaterials: updatedMaterials,
+      petFoods: updatedPetFoods,
+      heroLevelProgress: updatedHeroProgress,
     );
 
     _save();
@@ -1624,6 +1667,224 @@ class PlayerNotifier extends Notifier<Player> {
     final combined = [...aiEntries, playerEntry];
     combined.sort((a, b) => b.ap.compareTo(a.ap));
     return combined;
+  }
+
+  // --- Hero Story & Lore System ---
+
+  /// Claim a story chapter reward for a hero
+  bool claimHeroStoryChapter(String heroId, int chapterNumber) {
+    final story = HeroStory.getById(heroId);
+    if (story == null) return false;
+
+    final chapter = story.chapters.firstWhere(
+      (c) => c.chapterNumber == chapterNumber,
+      orElse: () => story.chapters.first,
+    );
+
+    final heroLvl = state.heroLevelProgress[heroId] ?? (state.currentHeroId == heroId ? state.level : 0);
+    if (heroLvl < chapter.requiredLevel) return false;
+
+    final claimed = Map<String, List<int>>.from(state.claimedHeroStoryChapters);
+    final heroClaimed = List<int>.from(claimed[heroId] ?? []);
+    if (heroClaimed.contains(chapterNumber)) return false;
+
+    heroClaimed.add(chapterNumber);
+    claimed[heroId] = heroClaimed;
+
+    int bonusGold = 200 * chapterNumber;
+    int bonusGems = chapterNumber == 3 ? 5 : 2;
+    String newTitle = state.title;
+
+    // Check if player has unlocked Chapter 3 for all 16 heroes
+    bool all16Done = true;
+    for (final s in HeroStory.allStories) {
+      final cList = claimed[s.heroId] ?? [];
+      if (!cList.contains(3)) {
+        all16Done = false;
+        break;
+      }
+    }
+    if (all16Done) {
+      newTitle = 'Nhà Sử Học';
+    }
+
+    state = state.copyWith(
+      claimedHeroStoryChapters: claimed,
+      gold: state.gold + bonusGold,
+      gems: state.gems + bonusGems,
+      title: newTitle,
+    );
+    _save();
+    return true;
+  }
+
+  // --- Companion System ---
+
+  /// Equip or unequip a companion
+  void equipCompanion(String? companionId) {
+    if (companionId == null || state.equippedCompanionId == companionId) {
+      state = state.copyWith(clearCompanion: true);
+    } else {
+      state = state.copyWith(equippedCompanionId: companionId);
+    }
+    _save();
+  }
+
+  /// Upgrades companion with pet food
+  bool upgradeCompanion(String companionId) {
+    final type = CompanionType.getById(companionId);
+    if (type == null) return false;
+
+    final currentLevel = state.companionLevels[companionId] ?? 1;
+    if (currentLevel >= 10) return false;
+
+    final cost = type.getUpgradeCost(currentLevel);
+    for (final entry in cost.entries) {
+      if ((state.petFoods[entry.key] ?? 0) < entry.value) {
+        return false;
+      }
+    }
+
+    final newPetFoods = Map<String, int>.from(state.petFoods);
+    for (final entry in cost.entries) {
+      newPetFoods[entry.key] = (newPetFoods[entry.key] ?? 0) - entry.value;
+    }
+
+    final newLevels = Map<String, int>.from(state.companionLevels);
+    newLevels[companionId] = currentLevel + 1;
+
+    state = state.copyWith(
+      petFoods: newPetFoods,
+      companionLevels: newLevels,
+    );
+    _save();
+    return true;
+  }
+
+  /// Add pet foods directly
+  void addPetFoods({int meat = 0, int herb = 0, int beastStone = 0}) {
+    final updated = Map<String, int>.from(state.petFoods);
+    updated['meat'] = (updated['meat'] ?? 0) + meat;
+    updated['herb'] = (updated['herb'] ?? 0) + herb;
+    updated['beast_stone'] = (updated['beast_stone'] ?? 0) + beastStone;
+    state = state.copyWith(petFoods: updated);
+    _save();
+  }
+
+  // --- Raid Boss System ---
+
+  /// Synchronizes and updates Raid Boss state, weekly rotation and stamina regen
+  void initRaidWeekIfNeeded() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final currentWeek = RaidBossInfo.getCurrentWeekNumber(timestampMs: now);
+    final boss = RaidBossInfo.getCurrentRaidBoss(timestampMs: now);
+
+    int newRaidWeek = state.currentRaidWeek;
+    int newBossHp = state.raidBossCurrentHp;
+    int newWeeklyDmg = state.weeklyRaidDamage;
+    bool newClaimedReward = state.hasClaimedWeeklyRaidReward;
+
+    // Weekly reset check
+    if (state.currentRaidWeek != currentWeek || (state.raidBossCurrentHp <= 0 && state.currentRaidWeek == 0)) {
+      newRaidWeek = currentWeek;
+      newBossHp = boss.maxHp;
+      newWeeklyDmg = 0;
+      newClaimedReward = false;
+    }
+
+    // Stamina regeneration: 1 stamina per 5 mins (300,000 ms), max 20
+    int currentStamina = state.raidStamina;
+    int lastRegen = state.lastRaidStaminaRegenTime;
+    if (lastRegen == 0) {
+      lastRegen = now;
+    } else {
+      final elapsedMs = now - lastRegen;
+      const regenInterval = 5 * 60 * 1000;
+      if (elapsedMs >= regenInterval && currentStamina < 20) {
+        final gained = elapsedMs ~/ regenInterval;
+        currentStamina = min(20, currentStamina + gained);
+        lastRegen = now - (elapsedMs % regenInterval);
+      }
+    }
+
+    // Daily stamina purchase reset check
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    int purchases = state.dailyStaminaPurchases;
+    if (state.lastStaminaPurchaseDate != todayStr) {
+      purchases = 0;
+    }
+
+    state = state.copyWith(
+      currentRaidWeek: newRaidWeek,
+      raidBossCurrentHp: newBossHp,
+      weeklyRaidDamage: newWeeklyDmg,
+      hasClaimedWeeklyRaidReward: newClaimedReward,
+      raidStamina: currentStamina,
+      lastRaidStaminaRegenTime: lastRegen,
+      dailyStaminaPurchases: purchases,
+      lastStaminaPurchaseDate: todayStr,
+    );
+    _save();
+  }
+
+  /// Purchase 5 stamina for 1 gem (max 3 times/day)
+  bool buyRaidStamina() {
+    initRaidWeekIfNeeded();
+    if (state.dailyStaminaPurchases >= 3 || state.gems < 1) return false;
+
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    state = state.copyWith(
+      gems: state.gems - 1,
+      raidStamina: min(20, state.raidStamina + 5),
+      dailyStaminaPurchases: state.dailyStaminaPurchases + 1,
+      lastStaminaPurchaseDate: todayStr,
+    );
+    _save();
+    return true;
+  }
+
+  /// Resolves the end of a raid battle attempt
+  void onRaidBattleEnd({required int damageDealt}) {
+    initRaidWeekIfNeeded();
+    final newHp = max(0, state.raidBossCurrentHp - damageDealt);
+    final newWeeklyDmg = state.weeklyRaidDamage + damageDealt;
+    final newStamina = max(0, state.raidStamina - 5);
+
+    state = state.copyWith(
+      raidBossCurrentHp: newHp,
+      weeklyRaidDamage: newWeeklyDmg,
+      raidStamina: newStamina,
+    );
+    _save();
+  }
+
+  /// Claim grand raid reward when boss is slain (HP == 0)
+  Equipment? claimRaidGrandReward() {
+    if (state.raidBossCurrentHp > 0 || state.hasClaimedWeeklyRaidReward) {
+      return null;
+    }
+
+    final boss = RaidBossInfo.getCurrentRaidBoss();
+    final legendaryGear = Equipment(
+      id: 'raid_legendary_${DateTime.now().microsecondsSinceEpoch}',
+      name: 'Thần Binh ${boss.name.split(" ").last}',
+      description: 'Tuyệt thế bảo vật thu được sau khi tiêu diệt ${boss.name}.',
+      slot: EquipmentSlot.weapon,
+      rarity: EquipmentRarity.legendary,
+      flatAtk: 85,
+      critRate: 0.12,
+      affixes: LootService.rollAffixesForRarity(EquipmentRarity.legendary),
+    );
+
+    final newInv = List<Equipment>.from(state.inventory)..add(legendaryGear);
+    state = state.copyWith(
+      inventory: newInv,
+      gems: state.gems + 100,
+      title: boss.grandTitle,
+      hasClaimedWeeklyRaidReward: true,
+    );
+    _save();
+    return legendaryGear;
   }
 
   /// Selects zone and stage to challenge

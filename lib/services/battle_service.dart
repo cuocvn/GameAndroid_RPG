@@ -12,6 +12,7 @@ import 'loot_service.dart';
 class BattleService {
   final Player player;
   late Enemy enemy;
+  final double? maxDuration;
   final void Function(BattleState state) onStateChanged;
   final void Function(BattleState finalState) onBattleEnded;
 
@@ -71,6 +72,7 @@ class BattleService {
   BattleService({
     required this.player,
     required Enemy enemy,
+    this.maxDuration,
     required this.onStateChanged,
     required this.onBattleEnded,
   }) {
@@ -136,6 +138,21 @@ class BattleService {
 
   void _update(double dt) {
     _battleDuration += dt;
+
+    if (maxDuration != null && _battleDuration >= maxDuration! && !_isFinished) {
+      _isFinished = true;
+      _timer?.cancel();
+      _addLog('Hết thời gian khiêu chiến (${maxDuration!.round()}s)!');
+      final finalState = _currentState(
+        isFighting: false,
+        isDefeated: enemy.currentHp > 0,
+        isWon: enemy.currentHp <= 0,
+        battleDuration: _battleDuration,
+      );
+      _emitDirect(finalState);
+      onBattleEnded(finalState);
+      return;
+    }
 
     // 1. Update Cooldowns
     _cooldowns.forEach((key, val) {

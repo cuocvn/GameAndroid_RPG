@@ -1,6 +1,7 @@
 import 'dart:math';
 import '../data/asset_mapping.dart';
 import 'arena_match_record.dart';
+import 'companion.dart';
 import 'equipment.dart';
 import 'stats.dart';
 
@@ -75,6 +76,26 @@ class Player {
   final List<Map<String, dynamic>> virtualLeaderboardData;
   final int lastLeaderboardSimTime;
 
+  // Story & Hero Lore System
+  final String currentHeroId;
+  final Map<String, int> heroLevelProgress;
+  final Map<String, List<int>> claimedHeroStoryChapters;
+
+  // Companion System
+  final String? equippedCompanionId;
+  final Map<String, int> companionLevels;
+  final Map<String, int> petFoods;
+
+  // Raid Boss System
+  final int raidStamina;
+  final int lastRaidStaminaRegenTime;
+  final int raidBossCurrentHp;
+  final int currentRaidWeek;
+  final int weeklyRaidDamage;
+  final bool hasClaimedWeeklyRaidReward;
+  final int dailyStaminaPurchases;
+  final String lastStaminaPurchaseDate;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -134,6 +155,24 @@ class Player {
     this.lastSeasonResetTimestamp = 0,
     this.virtualLeaderboardData = const [],
     this.lastLeaderboardSimTime = 0,
+    this.currentHeroId = 'cyra',
+    this.heroLevelProgress = const {'cyra': 1},
+    this.claimedHeroStoryChapters = const {},
+    this.equippedCompanionId,
+    this.companionLevels = const {},
+    this.petFoods = const {
+      'meat': 0,
+      'herb': 0,
+      'beast_stone': 0,
+    },
+    this.raidStamina = 20,
+    this.lastRaidStaminaRegenTime = 0,
+    this.raidBossCurrentHp = 500000,
+    this.currentRaidWeek = 0,
+    this.weeklyRaidDamage = 0,
+    this.hasClaimedWeeklyRaidReward = false,
+    this.dailyStaminaPurchases = 0,
+    this.lastStaminaPurchaseDate = '',
   });
 
   /// Required EXP to level up
@@ -161,9 +200,12 @@ class Player {
     );
 
     final baseTotal = stats + clampedBonus;
+    double mult = storyStatMultiplier;
     final ancientLvl = prestigeNodeLevels['ancient_power'] ?? 0;
     if (ancientLvl > 0) {
-      final mult = 1.0 + (ancientLvl * 0.05);
+      mult += (ancientLvl * 0.05);
+    }
+    if (mult != 1.0) {
       return Stats(
         str: (baseTotal.str * mult).round(),
         int_: (baseTotal.int_ * mult).round(),
@@ -228,10 +270,13 @@ class Player {
       (equippedArmor?.affixElementalResistPercent ?? 0.0) +
       (equippedAccessory?.affixElementalResistPercent ?? 0.0);
 
-  double get allAffixLifestealPercent =>
-      (equippedWeapon?.affixLifestealPercent ?? 0.0) +
-      (equippedArmor?.affixLifestealPercent ?? 0.0) +
-      (equippedAccessory?.affixLifestealPercent ?? 0.0);
+  double get allAffixLifestealPercent {
+    final compLifesteal = (equippedCompanionId == 'spirit') ? companionPassiveBonus : 0.0;
+    return (equippedWeapon?.affixLifestealPercent ?? 0.0) +
+        (equippedArmor?.affixLifestealPercent ?? 0.0) +
+        (equippedAccessory?.affixLifestealPercent ?? 0.0) +
+        compLifesteal;
+  }
 
   int get maxHp {
     final base = totalStats.maxHp +
@@ -240,7 +285,8 @@ class Player {
         (equippedAccessory?.socketHpBonus ?? 0);
     final hpBonus = (skillLevels['vital_body'] ?? 0) * 0.10; // +10% per level
     final tenacityBonus = (prestigeNodeLevels['tenacity_hp'] ?? 0) * 0.15; // +15% per level
-    return (base * (1.0 + hpBonus + tenacityBonus + allAffixHpPercent)).round();
+    final compHp = (equippedCompanionId == 'dragon') ? companionPassiveBonus : 0.0;
+    return (base * (1.0 + hpBonus + tenacityBonus + allAffixHpPercent + compHp)).round();
   }
 
   double get physicalDef {
@@ -282,7 +328,7 @@ class Player {
     return baseAtk * (1.0 + allAffixAtkPercent);
   }
 
-  /// Crit Rate: LUK * 0.5% + Equipment + Passives + Set Bonus + Sockets (capped at 60%)
+  /// Crit Rate: LUK * 0.5% + Equipment + Passives + Set Bonus + Sockets + Companion (capped at 60%)
   double get critRate {
     double rate = totalStats.critRate;
     if (equippedWeapon != null) rate += equippedWeapon!.critRate;
@@ -292,6 +338,9 @@ class Player {
     rate += frenzyRank * 0.05; // +5% per rank
     if (hasSetBonus2('loi_dinh')) {
       rate += 0.10; // +10% Crit rate from Lôi Đình 2-piece set bonus
+    }
+    if (equippedCompanionId == 'fox') {
+      rate += companionPassiveBonus;
     }
     return min(0.60, rate);
   }
@@ -306,11 +355,12 @@ class Player {
   /// Dodge chance: AGI * 0.3% (capped at 40%)
   double get dodgeRate => totalStats.dodgeRate;
 
-  /// Attack interval in seconds (AGI driven + prestige speed + affixes)
+  /// Attack interval in seconds (AGI driven + prestige speed + affixes + companion)
   double get attackInterval {
     final base = totalStats.attackInterval;
     final speedLvl = prestigeNodeLevels['swift_speed'] ?? 0;
-    final speedMult = (1.0 + speedLvl * 0.10) * (1.0 + allAffixAttackSpeedPercent);
+    final compSpeed = (equippedCompanionId == 'wolf') ? companionPassiveBonus : 0.0;
+    final speedMult = (1.0 + speedLvl * 0.10 + compSpeed) * (1.0 + allAffixAttackSpeedPercent);
     return max(0.35, base / speedMult);
   }
 
@@ -358,6 +408,9 @@ class Player {
     if (hasSetBonus2('viem_long')) {
       bonus += 0.20;
     }
+    if (equippedCompanionId == 'eagle') {
+      bonus += companionPassiveBonus;
+    }
     return bonus;
   }
 
@@ -368,6 +421,54 @@ class Player {
       return 0.20 + (igniteRank - 1) * 0.05; // 20%, 25%, 30%...
     }
     return 0.0;
+  }
+
+  /// Check if player has unlocked Chapter 3 on ALL 16 heroes
+  bool get hasHistorianTitle {
+    const allHeroes = [
+      'cyra', 'inari', 'violetta', 'valeria', 'kaelen', 'carmilla', 'elysia',
+      'sylvia', 'selene', 'aurora', 'lucia', 'marina', 'seraphina', 'giselle',
+      'freya', 'mai'
+    ];
+    for (final heroId in allHeroes) {
+      final claimed = claimedHeroStoryChapters[heroId] ?? const [];
+      if (!claimed.contains(3)) return false;
+    }
+    return true;
+  }
+
+  /// Stat multiplier from story progress (+1% current hero, +5% if historian)
+  double get storyStatMultiplier {
+    double mult = 1.0;
+    final heroClaimed = claimedHeroStoryChapters[currentHeroId] ?? const [];
+    if (heroClaimed.contains(3)) {
+      mult += 0.01;
+    }
+    if (hasHistorianTitle) {
+      mult += 0.05;
+    }
+    return mult;
+  }
+
+  /// Effective passive bonus from equipped companion (strictly capped at +30%)
+  double get companionPassiveBonus {
+    if (equippedCompanionId == null) return 0.0;
+    final comp = CompanionType.getById(equippedCompanionId!);
+    if (comp == null) return 0.0;
+    final lvl = companionLevels[equippedCompanionId!] ?? 1;
+    return comp.getEffectivePassive(lvl);
+  }
+
+  /// Current calculated raid stamina with offline regeneration (1 point per 5 mins, max 20)
+  int get calculatedRaidStamina {
+    if (raidStamina >= 20 || lastRaidStaminaRegenTime == 0) {
+      return raidStamina.clamp(0, 20);
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final diffMs = now - lastRaidStaminaRegenTime;
+    const regenIntervalMs = 5 * 60 * 1000;
+    final recovered = diffMs ~/ regenIntervalMs;
+    return min(20, raidStamina + recovered);
   }
 
   Player copyWith({
@@ -420,6 +521,21 @@ class Player {
     int? lastSeasonResetTimestamp,
     List<Map<String, dynamic>>? virtualLeaderboardData,
     int? lastLeaderboardSimTime,
+    String? currentHeroId,
+    Map<String, int>? heroLevelProgress,
+    Map<String, List<int>>? claimedHeroStoryChapters,
+    String? equippedCompanionId,
+    bool clearCompanion = false,
+    Map<String, int>? companionLevels,
+    Map<String, int>? petFoods,
+    int? raidStamina,
+    int? lastRaidStaminaRegenTime,
+    int? raidBossCurrentHp,
+    int? currentRaidWeek,
+    int? weeklyRaidDamage,
+    bool? hasClaimedWeeklyRaidReward,
+    int? dailyStaminaPurchases,
+    String? lastStaminaPurchaseDate,
   }) {
     return Player(
       name: name ?? this.name,
@@ -468,6 +584,20 @@ class Player {
       lastSeasonResetTimestamp: lastSeasonResetTimestamp ?? this.lastSeasonResetTimestamp,
       virtualLeaderboardData: virtualLeaderboardData ?? this.virtualLeaderboardData,
       lastLeaderboardSimTime: lastLeaderboardSimTime ?? this.lastLeaderboardSimTime,
+      currentHeroId: currentHeroId ?? this.currentHeroId,
+      heroLevelProgress: heroLevelProgress ?? this.heroLevelProgress,
+      claimedHeroStoryChapters: claimedHeroStoryChapters ?? this.claimedHeroStoryChapters,
+      equippedCompanionId: clearCompanion ? null : (equippedCompanionId ?? this.equippedCompanionId),
+      companionLevels: companionLevels ?? this.companionLevels,
+      petFoods: petFoods ?? this.petFoods,
+      raidStamina: raidStamina ?? this.raidStamina,
+      lastRaidStaminaRegenTime: lastRaidStaminaRegenTime ?? this.lastRaidStaminaRegenTime,
+      raidBossCurrentHp: raidBossCurrentHp ?? this.raidBossCurrentHp,
+      currentRaidWeek: currentRaidWeek ?? this.currentRaidWeek,
+      weeklyRaidDamage: weeklyRaidDamage ?? this.weeklyRaidDamage,
+      hasClaimedWeeklyRaidReward: hasClaimedWeeklyRaidReward ?? this.hasClaimedWeeklyRaidReward,
+      dailyStaminaPurchases: dailyStaminaPurchases ?? this.dailyStaminaPurchases,
+      lastStaminaPurchaseDate: lastStaminaPurchaseDate ?? this.lastStaminaPurchaseDate,
     );
   }
 
@@ -517,6 +647,20 @@ class Player {
         'lastSeasonResetTimestamp': lastSeasonResetTimestamp,
         'virtualLeaderboardData': virtualLeaderboardData,
         'lastLeaderboardSimTime': lastLeaderboardSimTime,
+        'currentHeroId': currentHeroId,
+        'heroLevelProgress': heroLevelProgress,
+        'claimedHeroStoryChapters': claimedHeroStoryChapters,
+        'equippedCompanionId': equippedCompanionId,
+        'companionLevels': companionLevels,
+        'petFoods': petFoods,
+        'raidStamina': raidStamina,
+        'lastRaidStaminaRegenTime': lastRaidStaminaRegenTime,
+        'raidBossCurrentHp': raidBossCurrentHp,
+        'currentRaidWeek': currentRaidWeek,
+        'weeklyRaidDamage': weeklyRaidDamage,
+        'hasClaimedWeeklyRaidReward': hasClaimedWeeklyRaidReward,
+        'dailyStaminaPurchases': dailyStaminaPurchases,
+        'lastStaminaPurchaseDate': lastStaminaPurchaseDate,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -614,5 +758,38 @@ class Player {
                 .toList() ??
             const [],
         lastLeaderboardSimTime: json['lastLeaderboardSimTime'] as int? ?? 0,
+        currentHeroId: json['currentHeroId'] as String? ?? 'cyra',
+        heroLevelProgress: (json['heroLevelProgress'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            const {'cyra': 1},
+        claimedHeroStoryChapters: (json['claimedHeroStoryChapters'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(
+                k,
+                (v as List<dynamic>).map((e) => e as int).toList(),
+              ),
+            ) ??
+            const {},
+        equippedCompanionId: json['equippedCompanionId'] as String?,
+        companionLevels: (json['companionLevels'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            const {},
+        petFoods: (json['petFoods'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            const {
+              'meat': 0,
+              'herb': 0,
+              'beast_stone': 0,
+            },
+        raidStamina: json['raidStamina'] as int? ?? 20,
+        lastRaidStaminaRegenTime: json['lastRaidStaminaRegenTime'] as int? ?? 0,
+        raidBossCurrentHp: json['raidBossCurrentHp'] as int? ?? 500000,
+        currentRaidWeek: json['currentRaidWeek'] as int? ?? 0,
+        weeklyRaidDamage: json['weeklyRaidDamage'] as int? ?? 0,
+        hasClaimedWeeklyRaidReward: json['hasClaimedWeeklyRaidReward'] as bool? ?? false,
+        dailyStaminaPurchases: json['dailyStaminaPurchases'] as int? ?? 0,
+        lastStaminaPurchaseDate: json['lastStaminaPurchaseDate'] as String? ?? '',
       );
 }

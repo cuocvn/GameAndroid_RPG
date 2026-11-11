@@ -9,10 +9,12 @@ import '../data/seed_skills.dart';
 import '../models/arena_opponent.dart';
 import '../models/arena_rank.dart';
 import '../models/battle_state.dart';
+import '../models/companion.dart';
 import '../models/enemy.dart';
 import '../models/equipment.dart';
 import '../models/equipment_set.dart';
 import '../models/player.dart';
+import '../models/raid_boss.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
 import '../services/battle_service.dart';
@@ -26,6 +28,8 @@ class BattleScreen extends ConsumerStatefulWidget {
   final bool isEndless;
   final bool isArena;
   final ArenaOpponent? arenaOpponent;
+  final bool isRaid;
+  final RaidBossInfo? raidBoss;
 
   const BattleScreen({
     super.key,
@@ -34,6 +38,8 @@ class BattleScreen extends ConsumerStatefulWidget {
     this.isEndless = false,
     this.isArena = false,
     this.arenaOpponent,
+    this.isRaid = false,
+    this.raidBoss,
   });
 
   @override
@@ -78,7 +84,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _dialogShown = false;
     _milestoneResult = null;
     final player = ref.read(playerProvider);
-    if (widget.isArena && widget.arenaOpponent != null) {
+    if (widget.isRaid && widget.raidBoss != null) {
+      _enemy = widget.raidBoss!.toEnemy(currentHp: player.raidBossCurrentHp);
+    } else if (widget.isArena && widget.arenaOpponent != null) {
       _enemy = widget.arenaOpponent!.toEnemy();
     } else if (widget.isEndless || _currentZoneId == 99) {
       _enemy = SeedEnemies.generateEndlessEnemy(_currentStage);
@@ -89,6 +97,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _battleService = BattleService(
       player: player,
       enemy: _enemy,
+      maxDuration: widget.isRaid ? 60.0 : null,
       onStateChanged: (state) {
         if (mounted) {
           setState(() {
@@ -114,6 +123,19 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     _dialogShown = true;
 
     final player = ref.read(playerProvider);
+
+    if (widget.isRaid && widget.raidBoss != null) {
+      final startingHp = player.raidBossCurrentHp;
+      final damageDealt = (startingHp - state.enemy.currentHp).clamp(0, startingHp);
+      ref.read(playerProvider.notifier).onRaidBattleEnd(damageDealt: damageDealt);
+      await _showRaidResultDialog(
+        boss: widget.raidBoss!,
+        damageDealt: damageDealt,
+        remainingHp: (startingHp - damageDealt).clamp(0, widget.raidBoss!.maxHp),
+        isDefeated: state.enemy.currentHp <= 0,
+      );
+      return;
+    }
 
     if (widget.isArena && widget.arenaOpponent != null) {
       final arenaResult = ref.read(playerProvider.notifier).onArenaBattleEnd(
@@ -151,28 +173,37 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final state = _currentState;
-    final zone = widget.isArena
-        ? const ZoneInfo(
-            id: 98,
-            name: 'Đấu Trường PvP',
-            description: 'Đỉnh phong quyết đấu đối thủ giả lập.',
-            iconEmoji: '⚔️',
-            bgAsset: 'assets/img/characters/004_Kaelen_TOP.jpg',
+    final zone = widget.isRaid && widget.raidBoss != null
+        ? ZoneInfo(
+            id: 97,
+            name: 'Vực Thẳm Diệt Thế',
+            description: widget.raidBoss!.name,
+            iconEmoji: widget.raidBoss!.icon,
+            bgAsset: widget.raidBoss!.imageAsset,
             stageCount: 1,
           )
-        : ((widget.isEndless || _currentZoneId == 99)
+        : (widget.isArena
             ? const ZoneInfo(
-                id: 99,
-                name: 'Tháp Vô Tận',
-                description: 'Vực thẳm vô tận khiêu chiến cực hạn sức mạnh.',
-                iconEmoji: '🌀',
-                bgAsset: 'assets/img/characters/012_Seraphina_JUNG.jpg',
-                stageCount: 100,
+                id: 98,
+                name: 'Đấu Trường PvP',
+                description: 'Đỉnh phong quyết đấu đối thủ giả lập.',
+                iconEmoji: '⚔️',
+                bgAsset: 'assets/img/characters/004_Kaelen_TOP.jpg',
+                stageCount: 1,
               )
-            : SeedEnemies.zones.firstWhere(
-                (z) => z.id == _currentZoneId,
-                orElse: () => SeedEnemies.zones.first,
-              ));
+            : ((widget.isEndless || _currentZoneId == 99)
+                ? const ZoneInfo(
+                    id: 99,
+                    name: 'Tháp Vô Tận',
+                    description: 'Vực thẳm vô tận khiêu chiến cực hạn sức mạnh.',
+                    iconEmoji: '🌀',
+                    bgAsset: 'assets/img/characters/012_Seraphina_JUNG.jpg',
+                    stageCount: 100,
+                  )
+                : SeedEnemies.zones.firstWhere(
+                    (z) => z.id == _currentZoneId,
+                    orElse: () => SeedEnemies.zones.first,
+                  )));
 
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
@@ -724,6 +755,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             fallbackEmoji: '🧙‍♀️',
             isBoss: false,
             isHero: true,
+            player: player,
           ),
 
           // MONSTER SPRITE ON PEDESTAL
@@ -745,39 +777,76 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     required String fallbackEmoji,
     required bool isBoss,
     required bool isHero,
+    Player? player,
   }) {
     final auraColor = isHero
         ? AppTheme.goldAccent
         : (isBoss ? AppTheme.goldAccent : AppTheme.redAccent);
 
+    final companionType = (isHero && player?.equippedCompanionId != null)
+        ? CompanionType.getById(player!.equippedCompanionId!)
+        : null;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Breathing Combatant Sprite
-        ScaleTransition(
-          scale: _breathingAnimation,
-          child: Container(
-            width: isBoss ? 135 : 115,
-            height: isBoss ? 145 : 125,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: auraColor.withOpacity(0.28),
-                  blurRadius: 18,
-                  spreadRadius: 1,
+        // Breathing Combatant Sprite with Companion badge
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ScaleTransition(
+              scale: _breathingAnimation,
+              child: Container(
+                width: isBoss ? 135 : 115,
+                height: isBoss ? 145 : 125,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: auraColor.withOpacity(0.28),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: AssetMapping.safeImage(
-                assetPath,
-                fit: BoxFit.contain,
-                fallbackEmoji: fallbackEmoji,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: AssetMapping.safeImage(
+                    assetPath,
+                    fit: BoxFit.contain,
+                    fallbackEmoji: fallbackEmoji,
+                  ),
+                ),
               ),
             ),
-          ),
+            if (companionType != null)
+              Positioned(
+                right: -10,
+                bottom: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1B1812),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.goldAccent, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.goldAccent.withOpacity(0.6),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Tooltip(
+                    message: '${companionType.icon} ${companionType.name}: ${companionType.description}',
+                    child: Text(
+                      companionType.icon,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
 
         const SizedBox(height: 6),
@@ -1489,6 +1558,151 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                     child: Text(
                       'RỜI ĐẤU TRƯỜNG',
                       style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showRaidResultDialog({
+    required RaidBossInfo boss,
+    required int damageDealt,
+    required int remainingHp,
+    required bool isDefeated,
+  }) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2A1520), Color(0xFF10070B)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDefeated ? AppTheme.goldAccent : AppTheme.redAccent,
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDefeated ? AppTheme.goldAccent : AppTheme.redAccent).withOpacity(0.4),
+                  blurRadius: 18,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isDefeated ? '🎉 ĐẠI MA VƯƠNG BỊ TIÊU DIỆT!' : '⚔️ KẾT THÚC LƯỢT KHIÊU CHIẾN',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cinzel(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: isDefeated ? AppTheme.goldAccent : Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${boss.icon} ${boss.name}',
+                  style: GoogleFonts.cinzel(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.goldAccent,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Sát thương lượt này:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          Text(
+                            '+$damageDealt',
+                            style: GoogleFonts.cinzel(
+                              color: AppTheme.goldAccent,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Máu Boss còn lại:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          Text(
+                            '$remainingHp / ${boss.maxHp}',
+                            style: TextStyle(
+                              color: remainingHp <= 0 ? Colors.greenAccent : Colors.redAccent,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (isDefeated)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.goldAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.goldAccent),
+                    ),
+                    child: const Text(
+                      '🌟 Đại Ma Vương đã gục ngã! Trở về sảnh Săn Boss để nhận Thần Binh Huyền Thoại & 100 💎!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                else
+                  const Text(
+                    'Sát thương đã được cộng dồn vào HP Boss tuần này. Bạn có thể tiếp tục khiêu chiến khi còn Thể Lực.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white60, fontSize: 11.5),
+                  ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.goldAccent,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.pop(context);
+                    },
+                    child: Text(
+                      'TRỞ VỀ SẢNH BOSS',
+                      style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ),

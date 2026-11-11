@@ -2,11 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:game_and/models/arena_opponent.dart';
 import 'package:game_and/models/arena_rank.dart';
+import 'package:game_and/models/companion.dart';
 import 'package:game_and/models/crafting_recipe.dart';
 import 'package:game_and/models/equipment.dart';
 import 'package:game_and/models/equipment_affix.dart';
 import 'package:game_and/models/gem.dart';
 import 'package:game_and/models/player.dart';
+import 'package:game_and/models/raid_boss.dart';
 import 'package:game_and/models/season_pass.dart';
 import 'package:game_and/models/stats.dart';
 import 'package:game_and/models/skill.dart';
@@ -710,5 +712,140 @@ void main() {
 
     // Cannot claim already claimed milestone again
     expect(notifier.claimSeasonMilestone(1), false);
+  });
+
+  test('Companion passive stat buff calculation and +30% cap enforcement', () {
+    // Check Dragon companion (HP buff)
+    const dragon = CompanionType.dragon;
+    expect(dragon.unlockLevel, 20);
+    expect(dragon.basePassive, 0.10);
+    // At level 1: 10%
+    expect(dragon.getEffectivePassive(1), 0.10);
+    // At level 5: 10% + 4 * 2% = 18%
+    expect(dragon.getEffectivePassive(5), closeTo(0.18, 0.001));
+    // At level 10: 10% + 9 * 2% = 28%
+    expect(dragon.getEffectivePassive(10), closeTo(0.28, 0.001));
+    // Check cap: even if level is clamped or exaggerated, never exceeds 0.30
+    expect(dragon.getEffectivePassive(15), 0.28); // clamped to 10
+    const eagle = CompanionType.eagle;
+    // Eagle base 0.08 + 9 * 0.02 = 0.26
+    expect(eagle.getEffectivePassive(10), closeTo(0.26, 0.001));
+
+    // Player with companion equipped gains stat buff
+    const basePlayer = Player(
+      stats: Stats(str: 10, int_: 10, vit: 10, agi: 10, luk: 10),
+    );
+    final unbuffedHp = basePlayer.maxHp;
+
+    // Equip Level 1 Dragon (+10% HP)
+    final buffedPlayer = basePlayer.copyWith(
+      equippedCompanionId: 'dragon',
+      companionLevels: {'dragon': 1},
+    );
+    expect(buffedPlayer.maxHp, greaterThan(unbuffedHp));
+    expect(buffedPlayer.maxHp, (unbuffedHp * 1.10).round());
+  });
+
+  test('Raid boss damage accumulation across battles and HP preservation', () {
+    final currentWeek = RaidBossInfo.getCurrentWeekNumber();
+    final boss = RaidBossInfo.getCurrentRaidBoss();
+    final initialHp = boss.maxHp;
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            Player(
+              currentRaidWeek: currentWeek,
+              raidStamina: 20,
+              raidBossCurrentHp: initialHp,
+              weeklyRaidDamage: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    expect(container.read(playerProvider).raidBossCurrentHp, initialHp);
+    expect(container.read(playerProvider).weeklyRaidDamage, 0);
+
+    // Battle 1: Deal 45,000 damage (tốn 5 thể lực)
+    notifier.onRaidBattleEnd(damageDealt: 45000);
+    expect(container.read(playerProvider).raidBossCurrentHp, initialHp - 45000);
+    expect(container.read(playerProvider).weeklyRaidDamage, 45000);
+    expect(container.read(playerProvider).raidStamina, 15);
+
+    // Battle 2: Deal 60,000 damage
+    notifier.onRaidBattleEnd(damageDealt: 60000);
+    expect(container.read(playerProvider).raidBossCurrentHp, initialHp - 105000);
+    expect(container.read(playerProvider).weeklyRaidDamage, 105000);
+    expect(container.read(playerProvider).raidStamina, 10);
+
+    // Defeating boss: deal remaining HP
+    notifier.onRaidBattleEnd(damageDealt: initialHp);
+    expect(container.read(playerProvider).raidBossCurrentHp, 0);
+    expect(container.read(playerProvider).hasClaimedWeeklyRaidReward, false);
+
+    // Claim Grand Reward: Guaranteed Legendary Gear + 100 💎 + Title
+    final reward = notifier.claimRaidGrandReward();
+    expect(reward, isNotNull);
+    expect(reward!.rarity, EquipmentRarity.legendary);
+    expect(container.read(playerProvider).gems, 103); // 3 initial + 100
+    expect(container.read(playerProvider).hasClaimedWeeklyRaidReward, true);
+
+    // Cannot claim reward twice
+    expect(notifier.claimRaidGrandReward(), isNull);
+  });
+
+  test('Raid stamina regeneration (5 mins / 1 stamina) and purchase limits', () {
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              raidStamina: 10,
+              gems: 10,
+              dailyStaminaPurchases: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+
+    // 1. Buy Stamina: 1 💎 = +5 stamina, max 3 purchases per day
+    expect(notifier.buyRaidStamina(), true);
+    expect(container.read(playerProvider).raidStamina, 15);
+    expect(container.read(playerProvider).gems, 9);
+    expect(container.read(playerProvider).dailyStaminaPurchases, 1);
+
+    expect(notifier.buyRaidStamina(), true);
+    expect(container.read(playerProvider).raidStamina, 20); // max 20
+    expect(container.read(playerProvider).dailyStaminaPurchases, 2);
+
+    expect(notifier.buyRaidStamina(), true);
+    expect(container.read(playerProvider).dailyStaminaPurchases, 3);
+
+    // 4th purchase rejected (limit 3 per day)
+    expect(notifier.buyRaidStamina(), false);
+    expect(container.read(playerProvider).dailyStaminaPurchases, 3);
+
+    // 2. Offline Stamina Regeneration:
+    // Simulated player with 10 stamina and last regen was 15 minutes ago (900,000 ms) -> should regenerate +3 stamina
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final fifteenMinsAgo = now - (15 * 60 * 1000);
+    notifier.setPlayer(
+      container.read(playerProvider).copyWith(
+            raidStamina: 10,
+            lastRaidStaminaRegenTime: fifteenMinsAgo,
+          ),
+    );
+
+    notifier.initRaidWeekIfNeeded();
+    expect(container.read(playerProvider).raidStamina, 13);
   });
 }

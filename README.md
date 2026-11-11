@@ -232,6 +232,39 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
   - *Mốc 21-29*: Ngọc Cấp 4 + Trang bị Epic.
   - *Mốc 30 (Đỉnh Phong Mùa)*: 1 Ngọc Cấp 5 + 50 💎 + 1 Mảnh Set Hoàng Kim huyền thoại ngẫu nhiên.
 
+### 2.16. Cốt Truyện & Biên Niên Sử 16 Danh Tướng
+- **Cơ chế**: Mỗi vị tướng trong số 16 danh tướng sở hữu cốt truyện riêng biệt gồm 3 chương (200-300 từ mỗi chương) ghi lại nguồn gốc sức mạnh và hành trình chiến đấu.
+- **Tiến trình mở khóa theo từng tướng**:
+  - *Cấp 5*: Mở khóa Chương 1.
+  - *Cấp 15*: Mở khóa Chương 2.
+  - *Cấp 30*: Mở khóa Chương 3 + Thưởng buff vĩnh viễn $+1\%$ tất cả chỉ số khi xuất trận cùng tướng đó.
+- **Phần thưởng tối thượng**: Hoàn thành Chương 3 của toàn bộ 16 tướng sẽ mở khóa danh hiệu độc quyền **"Nhà Sử Học"** và $+5\%$ toàn bộ chỉ số vĩnh viễn toàn cục.
+- **Giao diện**: Tab "📜 Cốt Truyện" trong mục Nhân Vật với giao diện trang sách cổ hoàng kim (Parchment Texture, phông chữ Cinzel & Merriweather cổ điển).
+
+### 2.17. Hệ Thống Thú Đồng Hành (Companion)
+- **Cơ chế**: Người chơi có thể mang theo 1 thú cưng đồng hành trợ chiến. Thú cưng không bị quái vật tấn công mà hỗ trợ thông qua nội tại bị động trực tiếp:
+  - 🐺 **Sói Con** (Mở khóa Lv.10): $+5\%$ Tốc độ đánh cơ bản.
+  - 🦅 **Đại Bàng Lửa** (Mở khóa Lv.15): $+8\%$ Sát thương kỹ năng hệ Hỏa.
+  - 🐉 **Long Nhi** (Mở khóa Lv.20): $+10\%$ Máu tối đa (Max HP).
+  - 🦊 **Hồ Ly Tinh** (Mở khóa Lv.25): $+5\%$ Tỉ lệ bạo kích (Crit Rate).
+  - 👻 **Oán Linh Nhỏ** (Mở khóa Lv.30): $+5\%$ Hút máu khi tấn công (Lifesteal).
+- **Nâng cấp thú cưng**: 10 cấp độ, tiêu hao thức ăn rơi từ quái (*Thịt Khô 🥩, Linh Thảo 🌿, Tinh Thạch Thú 💎*). Mỗi cấp tăng $+2\%$ hiệu ứng nội tại.
+- **Ràng buộc cân bằng**: Toàn bộ hiệu ứng bị động từ thú cưng được giới hạn nghiêm ngặt ở mức tối đa **$+30\%$**.
+- **Giao diện**: Tab "🐾 Đồng Hành" trong mục Nhân Vật, hiển thị icon thú cưng bồng bềnh viền vàng cạnh avatar người chơi trong sảnh chính và sàn đấu.
+
+### 2.18. Đại Chiến Boss Thế Giới (Endgame Raid Boss)
+- **Luân phiên hàng tuần (3 Boss Thế Giới)**:
+  - *Tuần 1*: 🐲 **Rồng Hỗn Mang Ragnarok** (500,000 HP, Sát thương cực cao, Hơi Thở Hắc Long gây thiêu rụi).
+  - *Tuần 2*: 👁️ **Nhãn Thần Azathoth** (800,000 HP, Kháng phép $50\%$, Tà Nhãn làm giảm DEF và đóng băng).
+  - *Tuần 3*: 💀 **Tử Thần Thanatos** (1,000,000 HP, Hút máu $30\%$, Khúc Ca Hắc Ám trừng phạt dũng sĩ).
+- **Cơ chế cộng dồn sát thương**: Mỗi lượt khiêu chiến kéo dài tối đa 60 giây hoặc đến khi nhân vật ngã xuống. Sát thương gây ra được trừ trực tiếp vào HP Boss và lưu trữ bền vững suốt tuần (cần từ 3-5 lượt đánh ở giai đoạn Lv 20-25).
+- **Cơ chế Thể Lực (Stamina)**:
+  - Tối đa 20 điểm thể lực. Tốn 5 điểm cho mỗi lượt tấn công.
+  - Tự động hồi phục ngoại tuyến: 1 điểm sau mỗi 5 phút (300,000 ms).
+  - Mua thể lực nhanh: 1 💎 = 5 thể lực (tối đa 3 lần/ngày).
+- **Phần thưởng Diệt Boss**: Nhận 1 Thần Binh Huyền Thoại (Legendary Weapon) + 100 💎 + Danh hiệu độc quyền theo Boss (*Kẻ Diệt Rồng, Kẻ Trảm Ma, Kẻ Nghịch Thần*).
+- **Bảng Xếp Hạng Sát Thương**: Top 10 tổng kết tuần, vị trí Top 1 nhận danh hiệu *"Sát Thần"* và 5,000 Vàng.
+
 ---
 
 ## 3. Hướng Dẫn Chạy & Kiểm Thử
@@ -240,7 +273,7 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
 ```bash
 flutter test
 ```
-Tất cả 23/23 tests được đảm bảo 100% Pass:
+Tất cả 26/26 tests được đảm bảo 100% Pass:
 - Baseline Vùng 1 quái thường làm mất $\ge 40\%$ HP nếu build sai.
 - Boss Vùng 1 đánh bại người chơi chưa nâng cấp.
 - Pure INT thất bại ở Vùng 3 do Kháng Phép 40%.
@@ -259,6 +292,9 @@ Tất cả 23/23 tests được đảm bảo 100% Pass:
 - Tính toán Bậc Hạng Đấu Trường (Arena Rank Tiers & Sub-ranks I, II, III).
 - Matchmaking theo khung Level (Power brackets 90-110%, 100-120%, 110-140%).
 - Tiến trình Vé Mùa Season Pass (30 Mốc, chuỗi 5 trận thắng thưởng thêm, nhận thưởng tích lũy).
+- Tính toán chỉ số nội tại thú cưng Companion và giới hạn trần nghiêm ngặt $+30\%$.
+- Cơ chế trừ máu Boss Raid và bảo toàn sát thương cộng dồn qua nhiều trận đánh.
+- Cơ chế hồi thể lực Raid ngoại tuyến (5 phút/1 thể lực) và giới hạn mua thể lực tối đa 3 lần/ngày.
 
 ### Chạy Ứng Dụng Trên Android Emulator hoặc Thiết Bị Thật
 ```bash

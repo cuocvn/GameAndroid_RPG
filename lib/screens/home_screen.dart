@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../models/arena_rank.dart';
+import '../models/companion.dart';
 import '../models/player.dart';
 import '../providers/game_providers.dart';
 import '../theme/app_theme.dart';
@@ -13,6 +14,7 @@ import 'build_screen.dart';
 import 'crafting_screen.dart';
 import 'map_screen.dart';
 import 'prestige_screen.dart';
+import 'raid_screen.dart';
 import 'shop_screen.dart';
 
 class QuestItem {
@@ -159,6 +161,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               hero['asset']!,
                               name: hero['name']!,
                               title: hero['title']!,
+                              heroId: hero['id']!,
                             );
                         Navigator.pop(ctx);
                       },
@@ -1202,6 +1205,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ),
                                     ),
                                   ),
+                                  if (player.equippedCompanionId != null &&
+                                      CompanionType.getById(player.equippedCompanionId!) != null)
+                                    Positioned(
+                                      top: 8,
+                                      left: 14,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1E1A12),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppTheme.goldAccent, width: 2),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppTheme.goldAccent.withOpacity(0.5),
+                                              blurRadius: 10,
+                                              spreadRadius: 1,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Tooltip(
+                                          message:
+                                              'Thú cưng: ${CompanionType.getById(player.equippedCompanionId!)!.name}',
+                                          child: Text(
+                                            CompanionType.getById(player.equippedCompanionId!)!.icon,
+                                            style: const TextStyle(fontSize: 18),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -1467,101 +1499,119 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ),
                     ],
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      // Shop Icon
-                      _buildBottomNavButton(
-                        icon: Icons.storefront,
-                        label: 'Cửa Hàng',
-                        isUnlocked: isShopUnlocked,
-                        unlockReqText: 'Mở khóa ở Lv.5',
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const ShopScreen()),
-                          );
-                        },
-                      ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        // Shop Icon
+                        _buildBottomNavButton(
+                          icon: Icons.storefront,
+                          label: 'Cửa Hàng',
+                          isUnlocked: isShopUnlocked,
+                          unlockReqText: 'Mở khóa ở Lv.5',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const ShopScreen()),
+                            );
+                          },
+                        ),
 
-                      // Crafting & Forge Icon
-                      _buildBottomNavButton(
-                        icon: Icons.hardware,
-                        label: 'Lò Rèn',
-                        isUnlocked: isShopUnlocked,
-                        unlockReqText: 'Mở khóa ở Lv.5',
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const CraftingScreen()),
-                          );
-                        },
-                      ),
+                        // Crafting & Forge Icon
+                        _buildBottomNavButton(
+                          icon: Icons.hardware,
+                          label: 'Lò Rèn',
+                          isUnlocked: isShopUnlocked,
+                          unlockReqText: 'Mở khóa ở Lv.5',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const CraftingScreen()),
+                            );
+                          },
+                        ),
 
-                      // Arena PvP Icon
-                      _buildBottomNavButton(
-                        icon: Icons.sports_kabaddi,
-                        label: 'Đấu Trường',
-                        isUnlocked: player.level >= 10 || player.highestEndlessFloor >= 5,
-                        unlockReqText: 'Mở khóa ở Lv.10 hoặc Tháp F5',
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const ArenaScreen()),
-                          );
-                        },
-                      ),
+                        // Arena PvP Icon
+                        _buildBottomNavButton(
+                          icon: Icons.sports_kabaddi,
+                          label: 'Đấu Trường',
+                          isUnlocked: player.level >= 10 || player.highestEndlessFloor >= 5,
+                          unlockReqText: 'Mở khóa ở Lv.10 hoặc Tháp F5',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const ArenaScreen()),
+                            );
+                          },
+                        ),
 
-                      // Map Icon
-                      _buildBottomNavButton(
-                        icon: Icons.map,
-                        label: 'Bản Đồ',
-                        isUnlocked: isMapUnlocked,
-                        unlockReqText: 'Mở khóa ở Lv.6',
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const MapScreen()),
-                          );
-                        },
-                      ),
+                        // Săn Boss Thế Giới (Raid Boss)
+                        _buildBottomNavButton(
+                          icon: Icons.whatshot,
+                          label: 'Săn Boss',
+                          isUnlocked: player.level >= 15 || player.highestEndlessFloor >= 10,
+                          unlockReqText: 'Mở Lv.15 hoặc Tháp F10',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const RaidScreen()),
+                            );
+                          },
+                        ),
 
-                      // Character / Build Icon (with pending point badge)
-                      _buildBottomNavButton(
-                        icon: Icons.tune,
-                        label: 'Nhân Vật',
-                        isUnlocked: true,
-                        hasBadge: hasPendingPoints,
-                        badgeCount: player.statPoints + player.skillPoints,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const BuildScreen()),
-                          );
-                        },
-                      ),
+                        // Map Icon
+                        _buildBottomNavButton(
+                          icon: Icons.map,
+                          label: 'Bản Đồ',
+                          isUnlocked: isMapUnlocked,
+                          unlockReqText: 'Mở khóa ở Lv.6',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const MapScreen()),
+                            );
+                          },
+                        ),
 
-                      // Prestige / Chuyển Sinh Icon
-                      _buildBottomNavButton(
-                        icon: Icons.auto_awesome,
-                        label: 'Chuyển Sinh',
-                        isUnlocked: isPrestigeUnlocked,
-                        unlockReqText: 'Mở Lv.30/F15',
-                        hasBadge: canPrestigeNow,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const PrestigeScreen()),
-                          );
-                        },
-                      ),
-                    ],
+                        // Character / Build Icon (with pending point badge)
+                        _buildBottomNavButton(
+                          icon: Icons.tune,
+                          label: 'Nhân Vật',
+                          isUnlocked: true,
+                          hasBadge: hasPendingPoints,
+                          badgeCount: player.statPoints + player.skillPoints,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const BuildScreen()),
+                            );
+                          },
+                        ),
+
+                        // Prestige / Chuyển Sinh Icon
+                        _buildBottomNavButton(
+                          icon: Icons.auto_awesome,
+                          label: 'Chuyển Sinh',
+                          isUnlocked: isPrestigeUnlocked,
+                          unlockReqText: 'Mở Lv.30/F15',
+                          hasBadge: canPrestigeNow,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (ctx) => const PrestigeScreen()),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),

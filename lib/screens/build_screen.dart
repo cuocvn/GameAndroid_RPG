@@ -5,10 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_equipment.dart';
 import '../data/seed_skills.dart';
+import '../models/companion.dart';
 import '../models/equipment.dart';
 import '../models/equipment_affix.dart';
 import '../models/equipment_set.dart';
 import '../models/gem.dart';
+import '../models/hero_story.dart';
 import '../models/player.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
@@ -34,7 +36,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   void _confirmRespecStats() {
@@ -167,6 +169,8 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
             ),
             child: TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.center,
               indicator: BoxDecoration(
                 gradient: AppTheme.goldButtonGradient,
                 borderRadius: BorderRadius.circular(20),
@@ -228,6 +232,12 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                 const Tab(
                   child: Text('BỘ SƯU TẬP'),
                 ),
+                const Tab(
+                  child: Text('📜 CỐT TRUYỆN'),
+                ),
+                const Tab(
+                  child: Text('🐾 ĐỒNG HÀNH'),
+                ),
               ],
             ),
           ),
@@ -244,6 +254,8 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
               ? _buildSkillsTab(player)
               : _buildLockedTab('KỸ NĂNG', 4, 'Chiến đấu vượt ải để lên Cấp 4 và mở khóa Bảng Kỹ Năng & Lựa chọn Build'),
           _buildSetCollectionTab(player),
+          _buildStoryTab(player),
+          _buildCompanionTab(player),
         ],
       ),
     );
@@ -2160,6 +2172,798 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
           ),
         ],
       ),
+    );
+  }
+
+  // ==========================================
+  // HỆ THỐNG 1: STORY / LORE CHO 16 TƯỚNG
+  // ==========================================
+
+  Widget _buildStoryTab(Player player) {
+    int fullyCompletedHeroes = 0;
+    for (final story in HeroStory.allStories) {
+      final claimedList = player.claimedHeroStoryChapters[story.heroId] ?? [];
+      if (claimedList.contains(3)) {
+        fullyCompletedHeroes++;
+      }
+    }
+
+    final hasHistorian = player.hasHistorianTitle;
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      children: [
+        // Header Banner
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF2C2417), Color(0xFF16120C)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('📜 ', style: TextStyle(fontSize: 22)),
+                  Expanded(
+                    child: Text(
+                      'BIÊN NIÊN SỬ 16 ANH HÙNG',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.goldAccent,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: hasHistorian ? AppTheme.goldAccent : Colors.black45,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.goldAccent.withOpacity(0.6)),
+                    ),
+                    child: Text(
+                      '$fullyCompletedHeroes/16 Tướng',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: hasHistorian ? Colors.black : AppTheme.goldAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Mỗi anh hùng mở khóa 3 chương cốt truyện khi đạt cấp độ 5, 15 và 30.\n• Hoàn thành Chương 3 mỗi tướng: +1% toàn chỉ số khi xuất trận cùng tướng đó.\n• Hoàn thành cả 16 tướng: Mở khóa danh hiệu [Nhà Sử Học] và +5% toàn chỉ số vĩnh viễn toàn cục!',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: Colors.white70,
+                  height: 1.35,
+                ),
+              ),
+              if (hasHistorian) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.goldAccent.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.goldAccent),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('👑 ', style: TextStyle(fontSize: 16)),
+                      Expanded(
+                        child: Text(
+                          'ĐẠT DANH HIỆU [NHÀ SỬ HỌC]: +5% TOÀN CHỈ SỐ TOÀN CỤC ĐANG KÍCH HOẠT!',
+                          style: GoogleFonts.cinzel(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.goldAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Grid of 16 heroes
+        ...HeroStory.allStories.map((story) {
+          final isCurrent = player.currentHeroId == story.heroId;
+          final heroLvl = player.heroLevelProgress[story.heroId] ?? (isCurrent ? player.level : 1);
+          final claimedList = player.claimedHeroStoryChapters[story.heroId] ?? [];
+          final hasCh3 = claimedList.contains(3);
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: isCurrent
+                  ? const LinearGradient(
+                      colors: [Color(0xFF2E2412), Color(0xFF1A1408)],
+                    )
+                  : AppTheme.surfaceGradient,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isCurrent
+                    ? AppTheme.goldAccent
+                    : (hasCh3 ? AppTheme.goldAccent.withOpacity(0.5) : Colors.white12),
+                width: isCurrent ? 1.5 : 1.0,
+              ),
+              boxShadow: isCurrent
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.goldAccent.withOpacity(0.2),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    // Hero avatar
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isCurrent ? AppTheme.goldAccent : Colors.white24,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ClipOval(
+                        child: AssetMapping.safeImage(
+                          story.avatarAsset,
+                          width: 48,
+                          height: 48,
+                          fallbackEmoji: '🧙',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Name & title
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                story.heroName,
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              if (isCurrent) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.goldAccent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'ĐANG CHỌN',
+                                    style: TextStyle(fontSize: 8.5, color: Colors.black, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            story.heroTitle,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppTheme.goldAccent.withOpacity(0.85),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Cấp tướng đạt được: Cấp $heroLvl',
+                            style: GoogleFonts.inter(
+                              fontSize: 10.5,
+                              color: Colors.white60,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (hasCh3)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppTheme.goldAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppTheme.goldAccent),
+                        ),
+                        child: const Text(
+                          '+1% Chỉ Số',
+                          style: TextStyle(fontSize: 10, color: AppTheme.goldAccent, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // 3 Chapters progress row
+                Row(
+                  children: story.chapters.map((ch) {
+                    final isUnlocked = heroLvl >= ch.requiredLevel;
+                    final isClaimed = claimedList.contains(ch.chapterNumber);
+
+                    Color chipColor = Colors.white12;
+                    Color textColor = Colors.white38;
+                    String statusLabel = 'Lv.${ch.requiredLevel}';
+
+                    if (isClaimed) {
+                      chipColor = AppTheme.greenAccent.withOpacity(0.2);
+                      textColor = AppTheme.greenAccent;
+                      statusLabel = '✅ Ch.${ch.chapterNumber}';
+                    } else if (isUnlocked) {
+                      chipColor = AppTheme.goldAccent.withOpacity(0.25);
+                      textColor = AppTheme.goldAccent;
+                      statusLabel = '🎁 Nhận Ch.${ch.chapterNumber}';
+                    } else {
+                      statusLabel = '🔒 Ch.${ch.chapterNumber}';
+                    }
+
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _showParchmentStoryDialog(story, ch);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            decoration: BoxDecoration(
+                              color: chipColor,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isClaimed
+                                    ? AppTheme.greenAccent.withOpacity(0.6)
+                                    : (isUnlocked ? AppTheme.goldAccent : Colors.white12),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  statusLabel,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  void _showParchmentStoryDialog(HeroStory story, StoryChapter chapter) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final p = ref.watch(playerProvider);
+            final heroLvl = p.heroLevelProgress[story.heroId] ??
+                (p.currentHeroId == story.heroId ? p.level : 1);
+            final claimed = p.claimedHeroStoryChapters[story.heroId] ?? [];
+            final isUnlocked = heroLvl >= chapter.requiredLevel;
+            final isClaimed = claimed.contains(chapter.chapterNumber);
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 560),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F1DF), // Parchment light antique paper
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFF8B6B3E), width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.7),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Parchment Header
+                    Row(
+                      children: [
+                        ClipOval(
+                          child: AssetMapping.safeImage(
+                            story.avatarAsset,
+                            width: 36,
+                            height: 36,
+                            fallbackEmoji: '🧙',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                story.heroName,
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF3B2610),
+                                ),
+                              ),
+                              Text(
+                                story.heroTitle,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10.5,
+                                  color: const Color(0xFF6B4E2B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Color(0xFF3B2610)),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Color(0xFFBCA67F), thickness: 1.5),
+                    const SizedBox(height: 6),
+
+                    // Chapter Title
+                    Text(
+                      chapter.title,
+                      style: GoogleFonts.cinzel(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF4A1A0B),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Story Text content in antique scroll
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEDE4CB),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFD4C2A0)),
+                        ),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            chapter.content,
+                            style: GoogleFonts.merriweather(
+                              fontSize: 12.5,
+                              height: 1.6,
+                              color: const Color(0xFF2C1D11),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Action buttons
+                    if (isClaimed)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2E5A36),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '✅ ĐÃ NHẬN THƯỞNG CHƯƠNG NÀY',
+                          style: GoogleFonts.cinzel(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    else if (isUnlocked)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9E2A2B),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          final success = ref.read(playerProvider.notifier).claimHeroStoryChapter(
+                                story.heroId,
+                                chapter.chapterNumber,
+                              );
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '🎁 Nhận thành công thưởng Chương ${chapter.chapterNumber} của ${story.heroName}!',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          '🎁 NHẬN THƯỞNG CHƯƠNG ${chapter.chapterNumber} (+${chapter.chapterNumber * 200}🪙 & Buff)',
+                          style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '🔒 Cần đạt Cấp độ ${chapter.requiredLevel} với ${story.heroName} để mở',
+                          style: GoogleFonts.inter(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF6B4E2B),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ==========================================
+  // HỆ THỐNG 2: COMPANION (THÚ ĐỒNG HÀNH)
+  // ==========================================
+
+  Widget _buildCompanionTab(Player player) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      children: [
+        // Inventory / Info Header
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E2835), Color(0xFF0F151C)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.blueAccent.withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('🐾 ', style: TextStyle(fontSize: 22)),
+                  Expanded(
+                    child: Text(
+                      'THÚ ĐỒNG HÀNH CHIẾN ĐẤU',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.cyanAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Mang theo 1 thú đồng hành vào trận. Thú cưng tăng cường trực tiếp chỉ số bị động (tối đa +30%). Nâng cấp cấp độ (1-10) bằng thức ăn thú rơi từ quái & boss.',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: Colors.white70,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Pet Food counts
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildPetFoodCounter('🥩 Thịt Khô', player.petFoods['meat'] ?? 0),
+                    _buildPetFoodCounter('🌿 Linh Thảo', player.petFoods['herb'] ?? 0),
+                    _buildPetFoodCounter('💎 Tinh Thạch Thú', player.petFoods['beast_stone'] ?? 0),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // List of 5 Companions
+        ...CompanionType.values.map((comp) {
+          final isUnlocked = player.level >= comp.unlockLevel;
+          final currentLevel = player.companionLevels[comp.id] ?? 1;
+          final isEquipped = player.equippedCompanionId == comp.id;
+          final passivePercent = (comp.getEffectivePassive(currentLevel) * 100).toStringAsFixed(1);
+          final nextPassivePercent = (comp.getEffectivePassive(currentLevel + 1) * 100).toStringAsFixed(1);
+          final upgradeCost = comp.getUpgradeCost(currentLevel);
+
+          bool hasEnoughFood = true;
+          for (final entry in upgradeCost.entries) {
+            if ((player.petFoods[entry.key] ?? 0) < entry.value) {
+              hasEnoughFood = false;
+              break;
+            }
+          }
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: isEquipped
+                  ? const LinearGradient(
+                      colors: [Color(0xFF2A2312), Color(0xFF141108)],
+                    )
+                  : AppTheme.surfaceGradient,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isEquipped
+                    ? AppTheme.goldAccent
+                    : (isUnlocked ? Colors.white24 : Colors.white10),
+                width: isEquipped ? 2.0 : 1.0,
+              ),
+              boxShadow: isEquipped
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.goldAccent.withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    // Icon
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isEquipped ? AppTheme.goldAccent : Colors.white24,
+                          width: 1.5,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        comp.icon,
+                        style: const TextStyle(fontSize: 26),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Title & Passive
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                comp.name,
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: isEquipped ? AppTheme.goldAccent : Colors.white,
+                                ),
+                              ),
+                              if (isEquipped) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.goldAccent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'ĐANG MANG',
+                                    style: TextStyle(fontSize: 9, color: Colors.black, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            comp.description,
+                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white70),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            isUnlocked
+                                ? 'Cấp $currentLevel/10: +$passivePercent%'
+                                : '🔒 Mở khóa ở Level ${comp.unlockLevel}',
+                            style: GoogleFonts.inter(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                              color: isUnlocked ? Colors.greenAccent : Colors.white38,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Equip / Unequip Toggle
+                    if (isUnlocked)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isEquipped ? Colors.grey.shade800 : AppTheme.goldAccent,
+                          foregroundColor: isEquipped ? Colors.white70 : Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          ref.read(playerProvider.notifier).equipCompanion(comp.id);
+                        },
+                        child: Text(
+                          isEquipped ? 'Tháo' : 'Mang',
+                          style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                  ],
+                ),
+
+                if (isUnlocked && currentLevel < 10) ...[
+                  const SizedBox(height: 10),
+                  const Divider(color: Colors.white12, height: 1),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nâng cấp lên Cấp ${currentLevel + 1} (+$nextPassivePercent%):',
+                            style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '🥩 ${upgradeCost['meat']}  •  🌿 ${upgradeCost['herb']}  •  💎 ${upgradeCost['beast_stone']}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: hasEnoughFood ? Colors.amberAccent : Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: hasEnoughFood ? Colors.blue.shade700 : Colors.grey.shade800,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: hasEnoughFood
+                            ? () {
+                                HapticFeedback.mediumImpact();
+                                final success =
+                                    ref.read(playerProvider.notifier).upgradeCompanion(comp.id);
+                                if (success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Đã nâng cấp ${comp.name} lên Cấp ${currentLevel + 1}!')),
+                                  );
+                                }
+                              }
+                            : null,
+                        child: Text(
+                          'Nâng Cấp',
+                          style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else if (isUnlocked && currentLevel >= 10) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    '⭐ ĐÃ ĐẠT CẤP ĐỘ TỐI ĐA (10/10) ⭐',
+                    style: TextStyle(fontSize: 11, color: AppTheme.goldAccent, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildPetFoodCounter(String label, int count) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10.5, color: Colors.white60)),
+        const SizedBox(height: 2),
+        Text(
+          '$count',
+          style: GoogleFonts.cinzel(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }

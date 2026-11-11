@@ -8,6 +8,7 @@ import '../providers/game_providers.dart';
 import '../theme/app_theme.dart';
 import 'battle_screen.dart';
 import 'build_screen.dart';
+import 'crafting_screen.dart';
 import 'map_screen.dart';
 import 'prestige_screen.dart';
 import 'shop_screen.dart';
@@ -1445,6 +1446,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (ctx) => const ShopScreen()),
+                          );
+                        },
+                      ),
+
+                      // Crafting & Forge Icon
+                      _buildBottomNavButton(
+                        icon: Icons.hardware,
+                        label: 'Lò Rèn',
+                        isUnlocked: isShopUnlocked,
+                        unlockReqText: 'Mở khóa ở Lv.5',
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (ctx) => const CraftingScreen()),
                           );
                         },
                       ),

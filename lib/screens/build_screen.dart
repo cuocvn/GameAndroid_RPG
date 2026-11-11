@@ -6,14 +6,18 @@ import '../data/asset_mapping.dart';
 import '../data/seed_equipment.dart';
 import '../data/seed_skills.dart';
 import '../models/equipment.dart';
+import '../models/equipment_affix.dart';
 import '../models/equipment_set.dart';
+import '../models/gem.dart';
 import '../models/player.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/equipment_card.dart';
 import '../widgets/skill_card.dart';
+import '../widgets/socket_row_widget.dart';
 import '../widgets/stat_row.dart';
+import 'gem_vault_screen.dart';
 
 class BuildScreen extends ConsumerStatefulWidget {
   const BuildScreen({super.key});
@@ -607,6 +611,28 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                   ),
                 ),
                 const SizedBox(width: 8),
+                InkWell(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    GemVaultSheet.show(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.goldAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5), width: 1),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('💎 ', style: TextStyle(fontSize: 10)),
+                        Text('Kho Ngọc', style: TextStyle(fontSize: 10, color: AppTheme.goldAccent, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 if (player.inventory.any((e) =>
                     e.rarity == EquipmentRarity.common ||
                     e.rarity == EquipmentRarity.uncommon))
@@ -672,6 +698,10 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
               onEquip: () => notifier.equipItem(item),
               onUpgrade: () => _showUpgradeDialog(item, player),
               onSell: () => notifier.sellItem(item),
+              onReforge: item.rarity.index >= EquipmentRarity.rare.index
+                  ? () => _showReforgeDialog(item, player)
+                  : null,
+              onTapSocket: (socketIdx, gem) => _handleSocketTap(item, socketIdx, gem, player),
             );
           }),
         const SizedBox(height: 24),
@@ -770,6 +800,7 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
   }
 
   void _showItemDetailSheet(Equipment item, {required bool isEquipped}) {
+    final player = ref.read(playerProvider);
     final notifier = ref.read(playerProvider.notifier);
     final rarityColor = AppTheme.getRarityColor(item.rarity);
 
@@ -824,10 +855,57 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
               ),
               const SizedBox(height: 14),
               Text(item.description, style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
+
+              if (item.maxSockets > 0) ...[
+                const SizedBox(height: 12),
+                SocketRowWidget(
+                  item: item,
+                  onTapSocket: (socketIdx, gem) {
+                    Navigator.pop(ctx);
+                    _handleSocketTap(item, socketIdx, gem, player);
+                  },
+                ),
+              ],
+
+              if (item.affixes.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Chỉ Số Phụ (Affix):',
+                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purpleAccent),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: item.affixes.map((a) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.purpleAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                      ),
+                      child: Text(a.description, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                    );
+                  }).toList(),
+                ),
+              ],
+
               const SizedBox(height: 18),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  if (item.rarity.index >= EquipmentRarity.rare.index)
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showReforgeDialog(item, player);
+                      },
+                      icon: const Icon(Icons.casino, size: 14, color: Colors.purpleAccent),
+                      label: const Text('Reforge', style: TextStyle(fontSize: 12, color: Colors.purpleAccent)),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.bgDark),
+                    ),
+                  const SizedBox(width: 8),
                   if (isEquipped)
                     ElevatedButton(
                       onPressed: () {
@@ -836,11 +914,478 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.white12),
                       child: const Text('Tháo Ra', style: TextStyle(color: Colors.white)),
+                    )
+                  else
+                    ElevatedButton(
+                      onPressed: () {
+                        notifier.equipItem(item);
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent, foregroundColor: Colors.black),
+                      child: const Text('Trang Bị'),
                     ),
                 ],
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _handleSocketTap(Equipment item, int socketIdx, Gem? gem, Player player) {
+    if (gem == null) {
+      _showGemPicker(context, item);
+    } else {
+      _showSocketGemManageDialog(context, item, socketIdx, gem, player);
+    }
+  }
+
+  void _showGemPicker(BuildContext context, Equipment item) {
+    final player = ref.read(playerProvider);
+    final notifier = ref.read(playerProvider.notifier);
+    final availableGems = <Gem, int>{};
+
+    for (final entry in player.gemInventory.entries) {
+      if (entry.value > 0) {
+        final parts = entry.key.split('_');
+        if (parts.length == 2) {
+          final type = GemType.values.firstWhere((t) => t.name == parts[0]);
+          final lvl = int.parse(parts[1]);
+          availableGems[Gem(type: type, level: lvl)] = entry.value;
+        }
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.bgSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppTheme.goldAccent, width: 1.2),
+          ),
+          title: Row(
+            children: [
+              const Text('💎', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Text(
+                'Chọn Ngọc Để Khảm',
+                style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+              ),
+            ],
+          ),
+          content: availableGems.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text(
+                    'Kho không có ngọc nào!\nHãy đánh quái hoặc vượt Tháp Vô Tận để thu thập ngọc.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                  ),
+                )
+              : SizedBox(
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: availableGems.length,
+                    itemBuilder: (c, i) {
+                      final gem = availableGems.keys.elementAt(i);
+                      final count = availableGems[gem]!;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: gem.type.color.withOpacity(0.4)),
+                        ),
+                        child: ListTile(
+                          dense: true,
+                          leading: Text(gem.type.emoji, style: const TextStyle(fontSize: 22)),
+                          title: Text(
+                            gem.name,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: gem.type.color),
+                          ),
+                          subtitle: Text(
+                            '${gem.bonusDescription} (Còn $count)',
+                            style: const TextStyle(fontSize: 11, color: Colors.white70),
+                          ),
+                          trailing: ElevatedButton(
+                            onPressed: () {
+                              notifier.insertGem(itemId: item.id, gem: gem);
+                              Navigator.pop(ctx);
+                              HapticFeedback.lightImpact();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('✨ Đã khảm [${gem.name}] vào [${item.name}]!'),
+                                  backgroundColor: Colors.green.shade800,
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.goldAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              minimumSize: Size.zero,
+                            ),
+                            child: const Text('Khảm', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đóng', style: TextStyle(color: Colors.white54)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSocketGemManageDialog(BuildContext context, Equipment item, int socketIdx, Gem gem, Player player) {
+    final notifier = ref.read(playerProvider.notifier);
+    final countInBag = player.gemInventory[gem.id] ?? 0;
+    final canUpgrade = countInBag >= 2 && gem.level < 5 && player.gold >= gem.upgradeGoldCost;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.bgSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: gem.type.color, width: 1.2),
+          ),
+          title: Row(
+            children: [
+              Text(gem.type.emoji, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  gem.name,
+                  style: GoogleFonts.cinzel(fontSize: 15, fontWeight: FontWeight.bold, color: gem.type.color),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Hiệu ứng: ${gem.bonusDescription}', style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Text(
+                'Tháo ngọc sẽ trả lại viên ngọc về Kho Bảo Ngọc hoàn toàn miễn phí (không mất ngọc).',
+                style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
+              ),
+              if (gem.level < 5) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(6)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Nâng cấp lên Cấp ${gem.level + 1}:', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.goldAccent)),
+                      Text('• Cần thêm 2 viên ${gem.name} từ kho (có $countInBag)', style: TextStyle(fontSize: 10.5, color: countInBag >= 2 ? Colors.greenAccent : Colors.redAccent)),
+                      Text('• Chi phí: ${gem.upgradeGoldCost} Vàng (có ${player.gold})', style: TextStyle(fontSize: 10.5, color: player.gold >= gem.upgradeGoldCost ? Colors.greenAccent : Colors.redAccent)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Hủy', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                notifier.removeGem(itemId: item.id, socketIndex: socketIdx);
+                Navigator.pop(ctx);
+                HapticFeedback.lightImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Đã tháo [${gem.name}] về kho!'),
+                    backgroundColor: Colors.blueGrey.shade800,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white12),
+              child: const Text('Tháo Ngọc', style: TextStyle(color: Colors.white)),
+            ),
+            if (gem.level < 5)
+              ElevatedButton(
+                onPressed: canUpgrade
+                    ? () {
+                        notifier.upgradeGemInSocket(itemId: item.id, socketIndex: socketIdx);
+                        Navigator.pop(ctx);
+                        HapticFeedback.mediumImpact();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('✨ Đã nâng cấp ngọc lên Cấp ${gem.level + 1}!'),
+                            backgroundColor: Colors.green.shade800,
+                          ),
+                        );
+                      }
+                    : null,
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent, foregroundColor: Colors.black),
+                child: const Text('Nâng Cấp'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showReforgeDialog(Equipment item, Player player) {
+    if (item.affixes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Trang bị này không có chỉ số phụ để Reforge!')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        int selectedAffixIdx = 0;
+        bool lockOther = false;
+        EquipmentAffix? candidate;
+
+        int goldCost = 500;
+        String matName = '1 Pha Lê';
+        String matKey = 'crystal';
+        int matCount = 1;
+        if (item.rarity == EquipmentRarity.epic) {
+          goldCost = 1500;
+          matName = '2 Hắc Kim';
+          matKey = 'steel';
+          matCount = 2;
+        } else if (item.rarity == EquipmentRarity.legendary) {
+          goldCost = 5000;
+          matName = '5 Tinh Hoa';
+          matKey = 'essence';
+          matCount = 5;
+        }
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final currentPlayer = ref.watch(playerProvider);
+            final notifier = ref.read(playerProvider.notifier);
+            final hasMats = (currentPlayer.craftingMaterials[matKey] ?? 0) >= matCount;
+            final hasGold = currentPlayer.gold >= goldCost;
+            final hasGems = !lockOther || currentPlayer.gems >= 1;
+            final canRoll = hasMats && hasGold && hasGems;
+
+            final currentAffix = item.affixes[selectedAffixIdx];
+
+            return AlertDialog(
+              backgroundColor: AppTheme.bgSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Colors.purpleAccent, width: 1.5),
+              ),
+              title: Row(
+                children: [
+                  const Text('🎲', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Reforge (Đổi Chỉ Số Phụ)',
+                      style: GoogleFonts.cinzel(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.purpleAccent),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trang bị: ${item.name} (${item.rarity.label})',
+                      style: const TextStyle(fontSize: 12.5, color: Colors.white70),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Text('Chọn dòng muốn đổi:', style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    ...List.generate(item.affixes.length, (idx) {
+                      final aff = item.affixes[idx];
+                      final isChosen = selectedAffixIdx == idx;
+                      return InkWell(
+                        onTap: () {
+                          setModalState(() {
+                            selectedAffixIdx = idx;
+                            candidate = null;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isChosen ? Colors.purpleAccent.withOpacity(0.2) : Colors.black26,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isChosen ? Colors.purpleAccent : Colors.white12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isChosen ? Icons.radio_button_checked : Icons.radio_button_off,
+                                size: 16,
+                                color: isChosen ? Colors.purpleAccent : Colors.white38,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(aff.description, style: TextStyle(fontSize: 12, color: isChosen ? Colors.white : Colors.white70)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+
+                    if (item.affixes.length >= 2) ...[
+                      const SizedBox(height: 4),
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('🔒 Khóa dòng còn lại (+1 💎)', style: TextStyle(fontSize: 11.5, color: Colors.white70)),
+                        value: lockOther,
+                        activeColor: Colors.purpleAccent,
+                        onChanged: (val) {
+                          setModalState(() => lockOther = val ?? false);
+                        },
+                      ),
+                    ],
+
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(6)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Chi phí:', style: TextStyle(fontSize: 11, color: Colors.white54)),
+                          Text(
+                            '💰 $goldCost + 💠 $matName${lockOther ? " + 💎 1" : ""}',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: canRoll ? AppTheme.goldAccent : Colors.redAccent),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (candidate != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade900.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.purpleAccent),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text('KẾT QUẢ REFORGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Column(
+                                  children: [
+                                    const Text('Hiện tại', style: TextStyle(fontSize: 10, color: Colors.white54)),
+                                    const SizedBox(height: 2),
+                                    Text(currentAffix.description, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                                  ],
+                                ),
+                                const Icon(Icons.arrow_forward, color: Colors.purpleAccent, size: 16),
+                                Column(
+                                  children: [
+                                    const Text('Mới', style: TextStyle(fontSize: 10, color: Colors.greenAccent)),
+                                    const SizedBox(height: 2),
+                                    Text(candidate!.description, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (candidate == null) ...[
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Hủy', style: TextStyle(color: Colors.white54)),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: canRoll
+                        ? () {
+                            HapticFeedback.mediumImpact();
+                            final rolled = notifier.rollReforgeCandidate(item: item, affixIndex: selectedAffixIdx);
+                            setModalState(() {
+                              candidate = rolled;
+                            });
+                          }
+                        : null,
+                    icon: const Icon(Icons.casino, size: 14),
+                    label: const Text('Quay Số', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purpleAccent,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ] else ...[
+                  ElevatedButton(
+                    onPressed: () {
+                      notifier.payReforgeFee(item: item, lockOtherAffix: lockOther);
+                      Navigator.pop(ctx);
+                      HapticFeedback.lightImpact();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Đã giữ lại chỉ số cũ (đã trừ phí).')),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white12),
+                    child: const Text('Giữ Chỉ Số Cũ', style: TextStyle(color: Colors.white)),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      notifier.payAndApplyReforge(
+                        itemId: item.id,
+                        affixIndex: selectedAffixIdx,
+                        newAffix: candidate!,
+                        lockOtherAffix: lockOther,
+                      );
+                      Navigator.pop(ctx);
+                      HapticFeedback.heavyImpact();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('🎉 Áp dụng chỉ số mới: ${candidate!.description}!'),
+                          backgroundColor: Colors.green.shade800,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.goldAccent,
+                      foregroundColor: Colors.black,
+                    ),
+                    child: const Text('Lấy Chỉ Số Mới', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
+            );
+          },
         );
       },
     );

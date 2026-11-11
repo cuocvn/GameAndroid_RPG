@@ -1,12 +1,17 @@
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/seed_enemies.dart';
+import '../data/seed_equipment.dart';
 import '../data/seed_skills.dart';
+import '../models/crafting_recipe.dart';
 import '../models/equipment.dart';
+import '../models/equipment_affix.dart';
+import '../models/gem.dart';
 import '../models/player.dart';
 import '../models/prestige_node.dart';
 import '../models/skill.dart';
 import '../models/stats.dart';
+import '../services/loot_service.dart';
 import '../services/save_service.dart';
 
 class MilestoneRewardResult {
@@ -392,6 +397,19 @@ class PlayerNotifier extends Notifier<Player> {
     return true;
   }
 
+  /// Buys a socket gem (e.g. Ruby, Emerald) from Shop with Gold
+  bool buyGem(Gem gem, int price) {
+    if (state.gold < price) return false;
+    final newGemInv = Map<String, int>.from(state.gemInventory);
+    newGemInv[gem.id] = (newGemInv[gem.id] ?? 0) + 1;
+    state = state.copyWith(
+      gold: state.gold - price,
+      gemInventory: newGemInv,
+    );
+    _save();
+    return true;
+  }
+
   /// Upgrades an item in inventory or equipped slots
   bool upgradeEquipment(String itemId) {
     // Find item
@@ -582,6 +600,25 @@ class PlayerNotifier extends Notifier<Player> {
       }
     }
 
+    final droppedGems = LootService.rollGems(
+      enemy: SeedEnemies.getEnemy(foughtZone, foughtStage),
+      player: state,
+    );
+    final droppedMaterials = LootService.rollCraftingMaterials(
+      enemy: SeedEnemies.getEnemy(foughtZone, foughtStage),
+      player: state,
+    );
+
+    final updatedGemInv = Map<String, int>.from(state.gemInventory);
+    for (final gem in droppedGems) {
+      updatedGemInv[gem.id] = (updatedGemInv[gem.id] ?? 0) + 1;
+    }
+
+    final updatedMaterials = Map<String, int>.from(state.craftingMaterials);
+    for (final entry in droppedMaterials.entries) {
+      updatedMaterials[entry.key] = (updatedMaterials[entry.key] ?? 0) + entry.value;
+    }
+
     state = state.copyWith(
       level: newLevel,
       currentExp: newExp,
@@ -594,6 +631,8 @@ class PlayerNotifier extends Notifier<Player> {
       clearedStages: clearedList,
       nextStageDifficultyBonus: triggeredSpeedrun ? 0.15 : 0.0,
       highestEndlessFloor: newHighestEndless,
+      gemInventory: updatedGemInv,
+      craftingMaterials: updatedMaterials,
     );
 
     _save();
@@ -713,12 +752,577 @@ class PlayerNotifier extends Notifier<Player> {
     return true;
   }
 
+  // --- GEM SOCKET SYSTEM ---
+
+  /// Inserts a gem into an equipment item's next available socket
+  bool insertGem({required String itemId, required Gem gem}) {
+    final gemId = gem.id;
+    final ownedCount = state.gemInventory[gemId] ?? 0;
+    if (ownedCount <= 0) return false;
+
+    Equipment? item;
+    bool inWeapon = state.equippedWeapon?.id == itemId;
+    bool inArmor = state.equippedArmor?.id == itemId;
+    bool inAccessory = state.equippedAccessory?.id == itemId;
+
+    if (inWeapon) {
+      item = state.equippedWeapon;
+    } else if (inArmor) {
+      item = state.equippedArmor;
+    } else if (inAccessory) {
+      item = state.equippedAccessory;
+    } else {
+      final idx = state.inventory.indexWhere((e) => e.id == itemId);
+      if (idx != -1) item = state.inventory[idx];
+    }
+
+    if (item == null) return false;
+    if (item.insertedGems.length >= item.maxSockets) return false;
+
+    final updatedGems = List<Gem>.from(item.insertedGems)..add(gem);
+    final updatedItem = item.copyWith(insertedGems: updatedGems);
+
+    final newGemInv = Map<String, int>.from(state.gemInventory);
+    newGemInv[gemId] = ownedCount - 1;
+    if (newGemInv[gemId]! <= 0) newGemInv.remove(gemId);
+
+    if (inWeapon) {
+      state = state.copyWith(equippedWeapon: updatedItem, gemInventory: newGemInv);
+    } else if (inArmor) {
+      state = state.copyWith(equippedArmor: updatedItem, gemInventory: newGemInv);
+    } else if (inAccessory) {
+      state = state.copyWith(equippedAccessory: updatedItem, gemInventory: newGemInv);
+    } else {
+      final newInv = List<Equipment>.from(state.inventory);
+      final idx = newInv.indexWhere((e) => e.id == itemId);
+      if (idx != -1) {
+        newInv[idx] = updatedItem;
+        state = state.copyWith(inventory: newInv, gemInventory: newGemInv);
+      }
+    }
+    _save();
+    return true;
+  }
+
+  /// Removes a gem from socket at socketIndex without losing it (returns to gem inventory)
+  bool removeGem({required String itemId, required int socketIndex}) {
+    Equipment? item;
+    bool inWeapon = state.equippedWeapon?.id == itemId;
+    bool inArmor = state.equippedArmor?.id == itemId;
+    bool inAccessory = state.equippedAccessory?.id == itemId;
+
+    if (inWeapon) {
+      item = state.equippedWeapon;
+    } else if (inArmor) {
+      item = state.equippedArmor;
+    } else if (inAccessory) {
+      item = state.equippedAccessory;
+    } else {
+      final idx = state.inventory.indexWhere((e) => e.id == itemId);
+      if (idx != -1) item = state.inventory[idx];
+    }
+
+    if (item == null) return false;
+    if (socketIndex < 0 || socketIndex >= item.insertedGems.length) return false;
+
+    final removedGem = item.insertedGems[socketIndex];
+    final updatedGems = List<Gem>.from(item.insertedGems)..removeAt(socketIndex);
+    final updatedItem = item.copyWith(insertedGems: updatedGems);
+
+    final newGemInv = Map<String, int>.from(state.gemInventory);
+    newGemInv[removedGem.id] = (newGemInv[removedGem.id] ?? 0) + 1;
+
+    if (inWeapon) {
+      state = state.copyWith(equippedWeapon: updatedItem, gemInventory: newGemInv);
+    } else if (inArmor) {
+      state = state.copyWith(equippedArmor: updatedItem, gemInventory: newGemInv);
+    } else if (inAccessory) {
+      state = state.copyWith(equippedAccessory: updatedItem, gemInventory: newGemInv);
+    } else {
+      final newInv = List<Equipment>.from(state.inventory);
+      final idx = newInv.indexWhere((e) => e.id == itemId);
+      if (idx != -1) {
+        newInv[idx] = updatedItem;
+        state = state.copyWith(inventory: newInv, gemInventory: newGemInv);
+      }
+    }
+    _save();
+    return true;
+  }
+
+  /// Upgrades a gem in socket from level N to N+1: consumes 2 same-level gems from bag + 50*N gold
+  bool upgradeGemInSocket({required String itemId, required int socketIndex}) {
+    Equipment? item;
+    bool inWeapon = state.equippedWeapon?.id == itemId;
+    bool inArmor = state.equippedArmor?.id == itemId;
+    bool inAccessory = state.equippedAccessory?.id == itemId;
+
+    if (inWeapon) {
+      item = state.equippedWeapon;
+    } else if (inArmor) {
+      item = state.equippedArmor;
+    } else if (inAccessory) {
+      item = state.equippedAccessory;
+    } else {
+      final idx = state.inventory.indexWhere((e) => e.id == itemId);
+      if (idx != -1) item = state.inventory[idx];
+    }
+
+    if (item == null) return false;
+    if (socketIndex < 0 || socketIndex >= item.insertedGems.length) return false;
+
+    final gem = item.insertedGems[socketIndex];
+    if (gem.level >= 5) return false;
+
+    final cost = gem.upgradeGoldCost;
+    if (state.gold < cost) return false;
+
+    final bagCount = state.gemInventory[gem.id] ?? 0;
+    if (bagCount < 2) return false;
+
+    final newGemInv = Map<String, int>.from(state.gemInventory);
+    newGemInv[gem.id] = bagCount - 2;
+    if (newGemInv[gem.id]! <= 0) newGemInv.remove(gem.id);
+
+    final nextLevelGem = Gem(type: gem.type, level: gem.level + 1);
+    final updatedGems = List<Gem>.from(item.insertedGems);
+    updatedGems[socketIndex] = nextLevelGem;
+    final updatedItem = item.copyWith(insertedGems: updatedGems);
+
+    if (inWeapon) {
+      state = state.copyWith(equippedWeapon: updatedItem, gemInventory: newGemInv, gold: state.gold - cost);
+    } else if (inArmor) {
+      state = state.copyWith(equippedArmor: updatedItem, gemInventory: newGemInv, gold: state.gold - cost);
+    } else if (inAccessory) {
+      state = state.copyWith(equippedAccessory: updatedItem, gemInventory: newGemInv, gold: state.gold - cost);
+    } else {
+      final newInv = List<Equipment>.from(state.inventory);
+      final idx = newInv.indexWhere((e) => e.id == itemId);
+      if (idx != -1) {
+        newInv[idx] = updatedItem;
+        state = state.copyWith(inventory: newInv, gemInventory: newGemInv, gold: state.gold - cost);
+      }
+    }
+    _save();
+    return true;
+  }
+
+  /// Fuse All (Ghép tất cả): auto upgrades gems in bag when having >= 3 of the same color & level
+  int fuseAllGems() {
+    int totalFused = 0;
+    final newGemInv = Map<String, int>.from(state.gemInventory);
+    int currentGold = state.gold;
+
+    for (final type in GemType.values) {
+      for (int lvl = 1; lvl < 5; lvl++) {
+        final gemId = '${type.name}_$lvl';
+        final count = newGemInv[gemId] ?? 0;
+        final costPerFuse = 50 * lvl;
+
+        int possibleFuses = count ~/ 3;
+        while (possibleFuses > 0 && currentGold >= costPerFuse) {
+          newGemInv[gemId] = (newGemInv[gemId] ?? 0) - 3;
+          if (newGemInv[gemId]! <= 0) newGemInv.remove(gemId);
+
+          final nextGemId = '${type.name}_${lvl + 1}';
+          newGemInv[nextGemId] = (newGemInv[nextGemId] ?? 0) + 1;
+
+          currentGold -= costPerFuse;
+          totalFused++;
+          possibleFuses--;
+        }
+      }
+    }
+
+    if (totalFused > 0) {
+      state = state.copyWith(
+        gemInventory: newGemInv,
+        gold: currentGold,
+      );
+      _save();
+    }
+    return totalFused;
+  }
+
+  /// Upgrades 1 gem of type & level in bag: consumes 3 gems + 50*level gold, gives 1 gem of level+1
+  bool upgradeGem(Gem gem) {
+    if (gem.level >= 5) return false;
+    final count = state.gemInventory[gem.id] ?? 0;
+    final cost = gem.upgradeGoldCost;
+    if (count < 3 || state.gold < cost) return false;
+
+    final newGemInv = Map<String, int>.from(state.gemInventory);
+    newGemInv[gem.id] = count - 3;
+    if (newGemInv[gem.id]! <= 0) newGemInv.remove(gem.id);
+
+    final nextId = '${gem.type.name}_${gem.level + 1}';
+    newGemInv[nextId] = (newGemInv[nextId] ?? 0) + 1;
+
+    state = state.copyWith(
+      gemInventory: newGemInv,
+      gold: state.gold - cost,
+    );
+    _save();
+    return true;
+  }
+
+  // --- CRAFTING SYSTEM ---
+
+  /// Crafts an equipment item according to recipe
+  Equipment? craftRecipe(CraftingRecipe recipe) {
+    if (state.level < recipe.requiredLevel) return null;
+    if (state.gold < recipe.goldCost) return null;
+    if (state.gems < recipe.gemsCost) return null;
+
+    for (final entry in recipe.requiredMaterials.entries) {
+      final owned = state.craftingMaterials[entry.key] ?? 0;
+      if (owned < entry.value) return null;
+    }
+
+    final newMats = Map<String, int>.from(state.craftingMaterials);
+    for (final entry in recipe.requiredMaterials.entries) {
+      newMats[entry.key] = (newMats[entry.key] ?? 0) - entry.value;
+    }
+
+    Equipment outputItem;
+    final rng = Random();
+
+    if (recipe.isSetPiece) {
+      final setPieces = SeedEquipment.allPredefinedEquipment.where((e) => e.setId != null).toList();
+      final picked = setPieces[rng.nextInt(setPieces.length)];
+      outputItem = Equipment(
+        id: 'crafted_${picked.id}_${DateTime.now().millisecondsSinceEpoch}_${rng.nextInt(1000)}',
+        name: picked.name,
+        description: picked.description,
+        slot: picked.slot,
+        rarity: picked.rarity,
+        flatAtk: picked.flatAtk,
+        flatDef: picked.flatDef,
+        flatHp: picked.flatHp,
+        critRate: picked.critRate,
+        fireDmgPercent: picked.fireDmgPercent,
+        manaRegen: picked.manaRegen,
+        bonusStats: picked.bonusStats,
+        iconAsset: picked.iconAsset,
+        emoji: picked.emoji,
+        sellPrice: picked.sellPrice,
+        upgradeLevel: 0,
+        setId: picked.setId,
+        affixes: LootService.rollAffixesForRarity(picked.rarity),
+        bonusSockets: rng.nextDouble() < 0.20 ? 1 : null,
+      );
+    } else {
+      final slot = recipe.targetSlot ?? EquipmentSlot.values[rng.nextInt(EquipmentSlot.values.length)];
+      final matchingPredefined = SeedEquipment.allPredefinedEquipment
+          .where((e) => e.rarity == recipe.targetRarity && (recipe.targetSlot == null || e.slot == slot))
+          .toList();
+
+      if (matchingPredefined.isNotEmpty && rng.nextBool()) {
+        final picked = matchingPredefined[rng.nextInt(matchingPredefined.length)];
+        outputItem = Equipment(
+          id: 'crafted_${picked.id}_${DateTime.now().millisecondsSinceEpoch}_${rng.nextInt(1000)}',
+          name: picked.name,
+          description: picked.description,
+          slot: picked.slot,
+          rarity: picked.rarity,
+          flatAtk: picked.flatAtk,
+          flatDef: picked.flatDef,
+          flatHp: picked.flatHp,
+          critRate: picked.critRate,
+          fireDmgPercent: picked.fireDmgPercent,
+          manaRegen: picked.manaRegen,
+          bonusStats: picked.bonusStats,
+          iconAsset: picked.iconAsset,
+          emoji: picked.emoji,
+          sellPrice: picked.sellPrice,
+          upgradeLevel: 0,
+          setId: picked.setId,
+          affixes: LootService.rollAffixesForRarity(picked.rarity),
+          bonusSockets: rng.nextDouble() < 0.15 ? 1 : null,
+        );
+      } else {
+        outputItem = Equipment(
+          id: 'crafted_${DateTime.now().microsecondsSinceEpoch}_${rng.nextInt(9999)}',
+          name: '${recipe.name} Thần Khí',
+          description: 'Trang bị do chính tay bạn tôi luyện và chế tác.',
+          slot: slot,
+          rarity: recipe.targetRarity,
+          flatAtk: slot == EquipmentSlot.weapon ? 25 + (recipe.requiredLevel * 2) : 0,
+          flatDef: slot == EquipmentSlot.armor ? 12 + recipe.requiredLevel : 0,
+          flatHp: slot == EquipmentSlot.armor ? 150 + (recipe.requiredLevel * 10) : 0,
+          critRate: slot == EquipmentSlot.accessory ? 0.05 : 0.0,
+          manaRegen: slot == EquipmentSlot.accessory ? 1.5 : 0.0,
+          emoji: recipe.emoji,
+          sellPrice: recipe.goldCost ~/ 2,
+          affixes: LootService.rollAffixesForRarity(recipe.targetRarity),
+          bonusSockets: rng.nextDouble() < 0.15 ? 1 : null,
+        );
+      }
+    }
+
+    final newInv = List<Equipment>.from(state.inventory)..add(outputItem);
+    final newCraftedIds = List<String>.from(state.craftedRecipeIds);
+    if (!newCraftedIds.contains(recipe.id)) {
+      newCraftedIds.add(recipe.id);
+    }
+
+    state = state.copyWith(
+      gold: state.gold - recipe.goldCost,
+      gems: state.gems - recipe.gemsCost,
+      craftingMaterials: newMats,
+      inventory: newInv,
+      craftedRecipeIds: newCraftedIds,
+    );
+    _save();
+    return outputItem;
+  }
+
+  // --- REFORGE SYSTEM ---
+
+  /// Rolls a candidate new affix for reforge (never duplicates existing affix types)
+  EquipmentAffix? rollReforgeCandidate({required Equipment item, required int affixIndex}) {
+    if (affixIndex < 0 || affixIndex >= item.affixes.length) return null;
+    final currentTypes = item.affixes.map((a) => a.type).toList();
+    return EquipmentAffix.rollRandom(excludeTypes: currentTypes);
+  }
+
+  /// Reforges an affix on equipment item: deducts cost, generates candidate or applies
+  bool payAndApplyReforge({
+    required String itemId,
+    required int affixIndex,
+    required EquipmentAffix newAffix,
+    bool lockOtherAffix = false,
+  }) {
+    Equipment? item;
+    bool inWeapon = state.equippedWeapon?.id == itemId;
+    bool inArmor = state.equippedArmor?.id == itemId;
+    bool inAccessory = state.equippedAccessory?.id == itemId;
+
+    if (inWeapon) {
+      item = state.equippedWeapon;
+    } else if (inArmor) {
+      item = state.equippedArmor;
+    } else if (inAccessory) {
+      item = state.equippedAccessory;
+    } else {
+      final idx = state.inventory.indexWhere((e) => e.id == itemId);
+      if (idx != -1) item = state.inventory[idx];
+    }
+
+    if (item == null) return false;
+    if (affixIndex < 0 || affixIndex >= item.affixes.length) return false;
+
+    int goldCost = 500;
+    String matKey = 'crystal';
+    int matCount = 1;
+    if (item.rarity == EquipmentRarity.epic) {
+      goldCost = 1500;
+      matKey = 'steel';
+      matCount = 2;
+    } else if (item.rarity == EquipmentRarity.legendary) {
+      goldCost = 5000;
+      matKey = 'essence';
+      matCount = 5;
+    }
+
+    int gemsCost = lockOtherAffix ? 1 : 0;
+
+    if (state.gold < goldCost) return false;
+    if (state.gems < gemsCost) return false;
+    if ((state.craftingMaterials[matKey] ?? 0) < matCount) return false;
+
+    final newMats = Map<String, int>.from(state.craftingMaterials);
+    newMats[matKey] = newMats[matKey]! - matCount;
+
+    final updatedAffixes = List<EquipmentAffix>.from(item.affixes);
+    updatedAffixes[affixIndex] = newAffix;
+    final updatedItem = item.copyWith(affixes: updatedAffixes);
+
+    if (inWeapon) {
+      state = state.copyWith(
+        equippedWeapon: updatedItem,
+        gold: state.gold - goldCost,
+        gems: state.gems - gemsCost,
+        craftingMaterials: newMats,
+      );
+    } else if (inArmor) {
+      state = state.copyWith(
+        equippedArmor: updatedItem,
+        gold: state.gold - goldCost,
+        gems: state.gems - gemsCost,
+        craftingMaterials: newMats,
+      );
+    } else if (inAccessory) {
+      state = state.copyWith(
+        equippedAccessory: updatedItem,
+        gold: state.gold - goldCost,
+        gems: state.gems - gemsCost,
+        craftingMaterials: newMats,
+      );
+    } else {
+      final newInv = List<Equipment>.from(state.inventory);
+      final idx = newInv.indexWhere((e) => e.id == itemId);
+      if (idx != -1) {
+        newInv[idx] = updatedItem;
+        state = state.copyWith(
+          inventory: newInv,
+          gold: state.gold - goldCost,
+          gems: state.gems - gemsCost,
+          craftingMaterials: newMats,
+        );
+      }
+    }
+    _save();
+    return true;
+  }
+
+  /// Pay reforge fee without applying (when user chooses "Giữ" old stat)
+  bool payReforgeFee({required Equipment item, bool lockOtherAffix = false}) {
+    int goldCost = 500;
+    String matKey = 'crystal';
+    int matCount = 1;
+    if (item.rarity == EquipmentRarity.epic) {
+      goldCost = 1500;
+      matKey = 'steel';
+      matCount = 2;
+    } else if (item.rarity == EquipmentRarity.legendary) {
+      goldCost = 5000;
+      matKey = 'essence';
+      matCount = 5;
+    }
+    int gemsCost = lockOtherAffix ? 1 : 0;
+    if (state.gold < goldCost || state.gems < gemsCost || (state.craftingMaterials[matKey] ?? 0) < matCount) {
+      return false;
+    }
+    final newMats = Map<String, int>.from(state.craftingMaterials);
+    newMats[matKey] = newMats[matKey]! - matCount;
+    state = state.copyWith(
+      gold: state.gold - goldCost,
+      gems: state.gems - gemsCost,
+      craftingMaterials: newMats,
+    );
+    _save();
+    return true;
+  }
+
+  // --- TRANSMUTE SYSTEM ---
+
+  /// Transmutes 3 items of the same rarity into 1 item of the next higher rarity
+  Equipment? transmuteEquipment(List<String> itemIds) {
+    if (itemIds.length != 3) return null;
+
+    final itemsToSacrifice = state.inventory.where((e) => itemIds.contains(e.id)).toList();
+    if (itemsToSacrifice.length != 3) return null;
+
+    final targetRarity = itemsToSacrifice.first.rarity;
+    if (!itemsToSacrifice.every((e) => e.rarity == targetRarity)) return null;
+
+    int goldCost = 100;
+    EquipmentRarity nextRarity;
+    switch (targetRarity) {
+      case EquipmentRarity.common:
+        nextRarity = EquipmentRarity.uncommon;
+        goldCost = 100;
+        break;
+      case EquipmentRarity.uncommon:
+        nextRarity = EquipmentRarity.rare;
+        goldCost = 300;
+        break;
+      case EquipmentRarity.rare:
+        nextRarity = EquipmentRarity.epic;
+        goldCost = 1000;
+        break;
+      case EquipmentRarity.epic:
+        nextRarity = EquipmentRarity.legendary;
+        goldCost = 3000;
+        break;
+      case EquipmentRarity.legendary:
+        return null;
+    }
+
+    if (state.gold < goldCost) return null;
+
+    final newInv = List<Equipment>.from(state.inventory);
+    final rng = Random();
+
+    // Epic -> Legendary has 30% success rate
+    if (targetRarity == EquipmentRarity.epic && rng.nextDouble() > 0.30) {
+      newInv.removeWhere((e) => e.id == itemsToSacrifice[0].id || e.id == itemsToSacrifice[1].id);
+      state = state.copyWith(
+        inventory: newInv,
+        gold: state.gold - goldCost,
+      );
+      _save();
+      return null;
+    }
+
+    newInv.removeWhere((e) => itemIds.contains(e.id));
+
+    final randomSlot = EquipmentSlot.values[rng.nextInt(EquipmentSlot.values.length)];
+    final matchingPredefined = SeedEquipment.allPredefinedEquipment
+        .where((e) => e.rarity == nextRarity)
+        .toList();
+
+    Equipment newItem;
+    if (matchingPredefined.isNotEmpty && rng.nextBool()) {
+      final picked = matchingPredefined[rng.nextInt(matchingPredefined.length)];
+      newItem = Equipment(
+        id: 'transmuted_${picked.id}_${DateTime.now().millisecondsSinceEpoch}_${rng.nextInt(1000)}',
+        name: picked.name,
+        description: picked.description,
+        slot: picked.slot,
+        rarity: picked.rarity,
+        flatAtk: picked.flatAtk,
+        flatDef: picked.flatDef,
+        flatHp: picked.flatHp,
+        critRate: picked.critRate,
+        fireDmgPercent: picked.fireDmgPercent,
+        manaRegen: picked.manaRegen,
+        bonusStats: picked.bonusStats,
+        iconAsset: picked.iconAsset,
+        emoji: picked.emoji,
+        sellPrice: picked.sellPrice,
+        upgradeLevel: 0,
+        setId: picked.setId,
+        affixes: LootService.rollAffixesForRarity(picked.rarity),
+      );
+    } else {
+      newItem = Equipment(
+        id: 'transmuted_${DateTime.now().microsecondsSinceEpoch}_${rng.nextInt(9999)}',
+        name: 'Biến Hoàn ${nextRarity.label} Bảo Khí',
+        description: 'Trang bị sinh ra từ lò luyện biến đổi trang bị huyền bí.',
+        slot: randomSlot,
+        rarity: nextRarity,
+        flatAtk: randomSlot == EquipmentSlot.weapon ? 20 + nextRarity.index * 15 : 0,
+        flatDef: randomSlot == EquipmentSlot.armor ? 8 + nextRarity.index * 6 : 0,
+        flatHp: randomSlot == EquipmentSlot.armor ? 100 + nextRarity.index * 120 : 0,
+        critRate: randomSlot == EquipmentSlot.accessory ? 0.04 * nextRarity.index : 0.0,
+        manaRegen: randomSlot == EquipmentSlot.accessory ? 1.0 + nextRarity.index * 0.5 : 0.0,
+        sellPrice: goldCost,
+        affixes: LootService.rollAffixesForRarity(nextRarity),
+      );
+    }
+
+    newInv.add(newItem);
+    state = state.copyWith(
+      inventory: newInv,
+      gold: state.gold - goldCost,
+    );
+    _save();
+    return newItem;
+  }
+
   /// Selects zone and stage to challenge
   void selectZoneAndStage(int zone, int stage) {
     state = state.copyWith(
       currentZone: zone,
       currentStage: stage,
     );
+    _save();
+  }
+
+  void setPlayer(Player newPlayer) {
+    state = newPlayer;
     _save();
   }
 

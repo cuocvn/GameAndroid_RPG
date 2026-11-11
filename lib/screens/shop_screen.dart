@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../data/seed_equipment.dart';
 import '../models/equipment.dart';
+import '../models/gem.dart';
 import '../models/player.dart';
 import '../models/stats.dart';
 import '../providers/game_providers.dart';
@@ -515,84 +516,189 @@ class _ShopScreenState extends ConsumerState<ShopScreen>
   }
 
   Widget _buildGemsTab(Player player) {
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(14),
-      itemCount: _gemPacks.length,
-      itemBuilder: (context, index) {
-        final pack = _gemPacks[index];
-        final canAfford = player.gold >= pack.price;
-
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: AppTheme.surfaceGradient,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.blueAccent.withOpacity(0.4), width: 1),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppTheme.blueAccent.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.blueAccent.withOpacity(0.6)),
+      children: [
+        Text(
+          'ĐÁ QUÝ NÂNG CẤP TRANG BỊ 💎',
+          style: GoogleFonts.cinzel(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+        ),
+        const SizedBox(height: 6),
+        ..._gemPacks.map((pack) {
+          final canAfford = player.gold >= pack.price;
+          return Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: AppTheme.surfaceGradient,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.blueAccent.withOpacity(0.4), width: 1),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppTheme.blueAccent.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.blueAccent.withOpacity(0.6)),
+                  ),
+                  child: const Text('💎', style: TextStyle(fontSize: 20)),
                 ),
-                child: const Text('💎', style: TextStyle(fontSize: 24)),
-              ),
-              const SizedBox(width: 14),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pack.title,
-                      style: GoogleFonts.cinzel(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.white,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pack.title,
+                        style: GoogleFonts.cinzel(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      pack.description,
-                      style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        pack.description,
+                        style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white60),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-
-              ElevatedButton(
-                onPressed: canAfford
-                    ? () {
-                        HapticFeedback.lightImpact();
-                        final success = ref.read(playerProvider.notifier).buyGems(pack.count, pack.price);
-                        if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('⚡ Đã mua thành công +${pack.count} Đá Quý!')),
-                          );
+                ElevatedButton(
+                  onPressed: canAfford
+                      ? () {
+                          HapticFeedback.lightImpact();
+                          final success = ref.read(playerProvider.notifier).buyGems(pack.count, pack.price);
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('⚡ Đã mua thành công +${pack.count} Đá Quý!')),
+                            );
+                          }
                         }
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.goldAccent,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  minimumSize: Size.zero,
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.goldAccent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                  ),
+                  child: Text(
+                    '${pack.price} 🪙',
+                    style: GoogleFonts.cinzel(fontWeight: FontWeight.w900, fontSize: 11.5),
+                  ),
                 ),
-                child: Text(
-                  '${pack.price} 🪙',
-                  style: GoogleFonts.cinzel(fontWeight: FontWeight.w900, fontSize: 12),
-                ),
-              ),
-            ],
+              ],
+            ),
+          );
+        }),
+
+        const SizedBox(height: 16),
+        Text(
+          'BẢO NGỌC KHẢM TRANG BỊ 🔴 🟢',
+          style: GoogleFonts.cinzel(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.goldAccent),
+        ),
+        const SizedBox(height: 6),
+
+        // Ruby Pack (+ATK)
+        _buildGemShopTile(
+          context: context,
+          player: player,
+          gem: const Gem(type: GemType.ruby, level: 1),
+          price: 150,
+          description: 'Hồng Ngọc cấp 1 khảm vào trang bị tăng +5 ATK.',
+        ),
+
+        // Emerald Pack (+DEF)
+        _buildGemShopTile(
+          context: context,
+          player: player,
+          gem: const Gem(type: GemType.emerald, level: 1),
+          price: 120,
+          description: 'Lục Ngọc cấp 1 khảm vào trang bị tăng +3 DEF.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGemShopTile({
+    required BuildContext context,
+    required Player player,
+    required Gem gem,
+    required int price,
+    required String description,
+  }) {
+    final canAfford = player.gold >= price;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: gem.type.color.withOpacity(0.4), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: gem.type.color.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: gem.type.color.withOpacity(0.6)),
+            ),
+            child: Text(gem.type.emoji, style: const TextStyle(fontSize: 20)),
           ),
-        );
-      },
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '1x ${gem.name}',
+                  style: GoogleFonts.cinzel(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                    color: gem.type.color,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white60),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: canAfford
+                ? () {
+                    HapticFeedback.lightImpact();
+                    final success = ref.read(playerProvider.notifier).buyGem(gem, price);
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('✨ Đã mua thành công 1x [${gem.name}]!')),
+                      );
+                    }
+                  }
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.goldAccent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+            ),
+            child: Text(
+              '$price 🪙',
+              style: GoogleFonts.cinzel(fontWeight: FontWeight.w900, fontSize: 11.5),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

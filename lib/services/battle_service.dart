@@ -447,8 +447,8 @@ class BattleService {
       _addLog('⚡ [Set Lôi Đình 3/3]: Bạo kích giáng sấm sét gây thêm $lightningDmg sát thương!');
     }
 
-    // Set Huyết Ma 2 & 3-piece: Lifesteal (+10% base, +50% under 30% HP)
-    double lifestealRatio = 0.0;
+    // Set Huyết Ma 2 & 3-piece + Affix Lifesteal:
+    double lifestealRatio = player.allAffixLifestealPercent;
     if (player.hasSetBonus2('huyet_ma')) {
       lifestealRatio += 0.10;
     }
@@ -462,7 +462,7 @@ class BattleService {
         _heroHp += actualHeal;
         _totalHealed += actualHeal;
         _addFloatingText('+$actualHeal 🩸', Colors.greenAccent, isHeroTarget: true);
-        _addLog('🩸 [Set Huyết Ma]: Hút máu hồi phục $actualHeal HP!');
+        _addLog('🩸 Hút máu hồi phục $actualHeal HP!');
       }
     }
 

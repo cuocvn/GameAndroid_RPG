@@ -135,6 +135,60 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
   - Nhật ký chiến đấu ghi lại từng chiêu thức và lượng sát thương cụ thể.
   - Sau trận chiến hoặc trong lúc thi đấu, nút **"XUẤT PHÂN TÍCH SÁT THƯƠNG"** hiển thị popup biểu đồ % sát thương của từng kỹ năng giúp người chơi tối ưu hóa build trang bị và khắc chế Boss.
 
+### 2.8. Hệ Thống Khảm Ngọc (Gem Sockets)
+- **Số ô khảm (Socket) theo bậc hiếm**:
+  - *Common / Uncommon*: 0 socket.
+  - *Rare*: 1 socket.
+  - *Epic*: 2 sockets.
+  - *Legendary*: 3 sockets.
+  - *Set items (Viêm Long, Hàn Băng, Lôi Đình, Huyết Ma)*: $+1$ socket cộng thêm.
+- **5 Loại Ngọc $\times$ 5 Cấp**:
+  - 🔴 **Hồng Ngọc (Ruby)**: $+5 / +10 / +15 / +25 / +40$ Sức tấn công (ATK). Rơi từ quái và mua ở Cửa hàng.
+  - 🔵 **Lam Ngọc (Sapphire)**: $+100 / +200 / +350 / +550 / +800$ Máu tối đa (Max HP). Rơi từ quái và Tháp Vô Tận.
+  - 🟢 **Lục Ngọc (Emerald)**: $+3 / +6 / +10 / +15 / +25$ Phòng thủ (DEF). Rơi từ quái và Cửa hàng.
+  - 🟡 **Hoàng Ngọc (Topaz)**: $+2\% / +3\% / +4\% / +6\% / +8\%$ Tỉ lệ chí mạng (Crit Rate). Rơi từ Boss ải.
+  - 🟣 **Tím Ngọc (Amethyst)**: $+0.5 / +1.0 / +1.5 / +2.5 / +4.0$ Hồi mana/giây. Rơi từ các tầng chẵn Tháp Vô Tận.
+- **Khảm / Tháo & Nâng Cấp**:
+  - Chạm vào ô socket trống trên thẻ trang bị để chọn ngọc từ kho và gắn vào ngay lập tức.
+  - **Tháo ngọc miễn phí 100% không mất ngọc** (QoL quan trọng).
+  - Nâng cấp trực tiếp trên trang bị (khi có đủ 2 viên cùng loại trong túi) hoặc trong **Kho Ngọc** (Sheet 5x5 grid 25 ô).
+  - Tính năng **"Ghép Tất Cả" (Fuse All)**: Tự động gom và ghép tất cả ngọc cấp $N$ đủ 3 viên lên cấp $N+1$ (phí $50 \times N$ vàng).
+
+### 2.9. Hệ Thống Chế Tạo Trang Bị (Crafting)
+- **4 Loại Nguyên Liệu Mới**:
+  - 🔩 **Sắt Cổ (`iron`)**: Rơi từ quái Vùng 1-2.
+  - 💠 **Pha Lê Ma Pháp (`crystal`)**: Rơi từ quái Vùng 3-4.
+  - 🌑 **Hắc Kim (`steel`)**: Rơi từ quái Vùng 5 và Tháp Vô Tận Tầng 10+.
+  - ✨ **Tinh Hoa Hỗn Mang (`essence`)**: Rơi từ Boss các vùng và Tháp Vô Tận Tầng 20+ (Rare).
+- **Màn hình Chế Tạo (`CraftingScreen`)**:
+  - Gồm 8 công thức mở khóa theo cấp độ người chơi (từ Lv 5+ đến Lv 30+).
+  - Cho phép chế tạo Vũ khí, Giáp, Phụ kiện từ bậc Uncommon, Rare, Epic, Legendary đến Mảnh Set Hoàng Kim ngẫu nhiên.
+  - Có tỉ lệ may mắn rèn ra trang bị kèm theo socket bonus hoặc Set Piece. Lưu trữ danh sách công thức đã từng chế tạo thành công.
+
+### 2.10. Hệ Thống Reforge (Tẩy / Đổi Dòng Chỉ Số Phụ)
+- Trang bị bậc **Rare+** tự động sở hữu 1-2 dòng chỉ số phụ ngẫu nhiên (Affix).
+- **Bể Chỉ Số Phụ (Affix Pool)**:
+  - $+X\%$ Sức tấn công ATK ($3\% - 15\%$).
+  - $+X\%$ Máu tối đa Max HP ($5\% - 20\%$).
+  - $+X\%$ Sát thương chí mạng Crit DMG ($10\% - 35\%$).
+  - $+X\%$ Tốc độ đánh Attack Speed ($5\% - 15\%$).
+  - $+X\%$ Kháng nguyên tố Elemental Resist ($5\% - 20\%$).
+  - $+X\%$ Hút máu Lifesteal ($2\% - 8\%$).
+- **Quy tắc Reforge**:
+  - Đổi ngẫu nhiên 1 dòng affix và **tuyệt đối không bao giờ ra trùng loại affix đã có trên món đồ**.
+  - Chi phí theo bậc: Rare (500 vàng + 1 Pha Lê), Epic (1500 vàng + 2 Hắc Kim), Legendary (5000 vàng + 5 Tinh Hoa).
+  - Có cơ chế **Khóa Dòng (Lock Affix)** với chi phí thêm 1 💎.
+  - Popup so sánh trực quan dòng hiện tại $\rightarrow$ dòng mới với 2 tùy chọn **"Giữ"** (giữ dòng cũ nếu không ưng, chỉ mất phí rèn) hoặc **"Lấy"** (áp dụng dòng mới).
+
+### 2.11. Hệ Thống Biến Đổi Trang Bị (Transmute / Lò Rèn)
+- Tích hợp tại Tab 2 màn hình Chế Tạo.
+- Cho phép hợp nhất **3 món trang bị cùng bậc hiếm** để tạo ra **1 món trang bị bậc hiếm cao hơn**:
+  - 3 Common $\rightarrow$ 1 Uncommon (100 vàng).
+  - 3 Uncommon $\rightarrow$ 1 Rare (300 vàng).
+  - 3 Rare $\rightarrow$ 1 Epic (1000 vàng).
+  - 3 Epic $\rightarrow$ 1 Legendary (3000 vàng, 30% tỉ lệ thành công, thất bại giữ lại 1 món Epic).
+- Tiện ích QoL: **"Tự động chọn 3 món rác thấp nhất"** giúp người chơi dọn kho đồ nhanh chóng.
+
 ---
 
 ## 3. Hướng Dẫn Chạy & Kiểm Thử
@@ -143,7 +197,7 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
 ```bash
 flutter test
 ```
-Tất cả 16/16 tests được đảm bảo 100% Pass:
+Tất cả 20/20 tests được đảm bảo 100% Pass:
 - Baseline Vùng 1 quái thường làm mất $\ge 40\%$ HP nếu build sai.
 - Boss Vùng 1 đánh bại người chơi chưa nâng cấp.
 - Pure INT thất bại ở Vùng 3 do Kháng Phép 40%.
@@ -155,6 +209,10 @@ Tất cả 16/16 tests được đảm bảo 100% Pass:
 - Tác động chỉ số của các node trên Cây Ngộ Đạo.
 - Kích hoạt đúng hiệu ứng 2 món và 3 món của 4 Bộ Trang Bị Hoàng Kim.
 - Kiểm tra toàn diện 5 Boss Vùng với đầy đủ 2 chiêu thức đặc trưng, thời gian hồi chiêu và cơ chế Telegraph.
+- Hệ thống Khảm Ngọc (Socket, Gem stat scaling, tháo lắp không hao hụt, Ghép tất cả).
+- Hệ thống Chế Tạo (Mở khóa công thức, trừ nguyên liệu, chế tạo đồ và Set item).
+- Hệ thống Reforge (Đổi dòng ngẫu nhiên không trùng lặp, trừ tài nguyên và cập nhật chỉ số).
+- Hệ thống Transmute (Ghép 3 món cùng bậc thành bậc cao hơn, kiểm tra thất bại & validate input).
 
 ### Chạy Ứng Dụng Trên Android Emulator hoặc Thiết Bị Thật
 ```bash

@@ -57,6 +57,11 @@ class Player {
   final int totalEnlightenmentEarned;
   final Map<String, int> prestigeNodeLevels;
 
+  // Systems: Gems, Crafting Materials, Reforge
+  final Map<String, int> gemInventory; // gemId ('ruby_1', 'topaz_3') -> count
+  final Map<String, int> craftingMaterials; // 'iron', 'crystal', 'steel', 'essence' -> count
+  final List<String> craftedRecipeIds; // list of recipe IDs that have been crafted
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -98,6 +103,14 @@ class Player {
     this.enlightenmentPoints = 0,
     this.totalEnlightenmentEarned = 0,
     this.prestigeNodeLevels = const {},
+    this.gemInventory = const {},
+    this.craftingMaterials = const {
+      'iron': 0,
+      'crystal': 0,
+      'steel': 0,
+      'essence': 0,
+    },
+    this.craftedRecipeIds = const [],
   });
 
   /// Required EXP to level up
@@ -140,17 +153,78 @@ class Player {
     return baseTotal;
   }
 
-  // --- Derived combat numbers ---
+  // --- Derived combat numbers & Gem Socket / Affix helpers ---
+
+  int get allEquippedSocketAtk =>
+      (equippedWeapon?.socketAtkBonus ?? 0) +
+      (equippedArmor?.socketAtkBonus ?? 0) +
+      (equippedAccessory?.socketAtkBonus ?? 0);
+
+  int get allEquippedSocketHp =>
+      (equippedWeapon?.socketHpBonus ?? 0) +
+      (equippedArmor?.socketHpBonus ?? 0) +
+      (equippedAccessory?.socketHpBonus ?? 0);
+
+  int get allEquippedSocketDef =>
+      (equippedWeapon?.socketDefBonus ?? 0) +
+      (equippedArmor?.socketDefBonus ?? 0) +
+      (equippedAccessory?.socketDefBonus ?? 0);
+
+  double get allEquippedSocketCrit =>
+      (equippedWeapon?.socketCritBonus ?? 0.0) +
+      (equippedArmor?.socketCritBonus ?? 0.0) +
+      (equippedAccessory?.socketCritBonus ?? 0.0);
+
+  double get allEquippedSocketManaRegen =>
+      (equippedWeapon?.socketManaRegenBonus ?? 0.0) +
+      (equippedArmor?.socketManaRegenBonus ?? 0.0) +
+      (equippedAccessory?.socketManaRegenBonus ?? 0.0);
+
+  double get allAffixAtkPercent =>
+      (equippedWeapon?.affixAtkPercent ?? 0.0) +
+      (equippedArmor?.affixAtkPercent ?? 0.0) +
+      (equippedAccessory?.affixAtkPercent ?? 0.0);
+
+  double get allAffixHpPercent =>
+      (equippedWeapon?.affixHpPercent ?? 0.0) +
+      (equippedArmor?.affixHpPercent ?? 0.0) +
+      (equippedAccessory?.affixHpPercent ?? 0.0);
+
+  double get allAffixCritDmgPercent =>
+      (equippedWeapon?.affixCritDmgPercent ?? 0.0) +
+      (equippedArmor?.affixCritDmgPercent ?? 0.0) +
+      (equippedAccessory?.affixCritDmgPercent ?? 0.0);
+
+  double get allAffixAttackSpeedPercent =>
+      (equippedWeapon?.affixAttackSpeedPercent ?? 0.0) +
+      (equippedArmor?.affixAttackSpeedPercent ?? 0.0) +
+      (equippedAccessory?.affixAttackSpeedPercent ?? 0.0);
+
+  double get allAffixElementalResistPercent =>
+      (equippedWeapon?.affixElementalResistPercent ?? 0.0) +
+      (equippedArmor?.affixElementalResistPercent ?? 0.0) +
+      (equippedAccessory?.affixElementalResistPercent ?? 0.0);
+
+  double get allAffixLifestealPercent =>
+      (equippedWeapon?.affixLifestealPercent ?? 0.0) +
+      (equippedArmor?.affixLifestealPercent ?? 0.0) +
+      (equippedAccessory?.affixLifestealPercent ?? 0.0);
 
   int get maxHp {
-    final base = totalStats.maxHp + (equippedArmor?.effectiveFlatHp ?? 0);
+    final base = totalStats.maxHp +
+        (equippedArmor?.effectiveFlatHp ?? 0) +
+        (equippedWeapon?.socketHpBonus ?? 0) +
+        (equippedAccessory?.socketHpBonus ?? 0);
     final hpBonus = (skillLevels['vital_body'] ?? 0) * 0.10; // +10% per level
     final tenacityBonus = (prestigeNodeLevels['tenacity_hp'] ?? 0) * 0.15; // +15% per level
-    return (base * (1.0 + hpBonus + tenacityBonus)).round();
+    return (base * (1.0 + hpBonus + tenacityBonus + allAffixHpPercent)).round();
   }
 
   double get physicalDef {
-    final base = totalStats.physicalDef + (equippedArmor?.effectiveFlatDef ?? 0);
+    final base = totalStats.physicalDef +
+        (equippedArmor?.effectiveFlatDef ?? 0) +
+        (equippedWeapon?.socketDefBonus ?? 0) +
+        (equippedAccessory?.socketDefBonus ?? 0);
     final defBonus = (skillLevels['vital_body'] ?? 0) * 3.0;
     return base + defBonus;
   }
@@ -160,51 +234,61 @@ class Player {
   double get manaRegenPerSecond {
     double regen = 5.0; // Base 5 mana/sec
     if (equippedAccessory != null) regen += equippedAccessory!.manaRegen;
+    regen += allEquippedSocketManaRegen;
     final manaBonusRank = skillLevels['arcane_flow'] ?? 0;
     regen += manaBonusRank * 2.0; // +2 mana/sec per rank
     return regen;
   }
 
   /// Damage formulas:
-  /// Physical ATK = STR * 2.5 + Weapon
-  double get physicalAtk =>
-      (totalStats.str * 2.5) + (equippedWeapon?.effectiveFlatAtk ?? 0);
+  /// Physical ATK = (STR * 2.5 + Weapon + SocketATK) * (1 + AffixATK)
+  double get physicalAtk {
+    final baseAtk = (totalStats.str * 2.5) +
+        (equippedWeapon?.effectiveFlatAtk ?? 0) +
+        (equippedArmor?.socketAtkBonus ?? 0) +
+        (equippedAccessory?.socketAtkBonus ?? 0);
+    return baseAtk * (1.0 + allAffixAtkPercent);
+  }
 
-  /// Magic ATK = INT * 3.0 + Weapon
-  double get magicAtk =>
-      (totalStats.int_ * 3.0) + (equippedWeapon?.effectiveFlatAtk ?? 0);
+  /// Magic ATK = (INT * 3.0 + Weapon + SocketATK) * (1 + AffixATK)
+  double get magicAtk {
+    final baseAtk = (totalStats.int_ * 3.0) +
+        (equippedWeapon?.effectiveFlatAtk ?? 0) +
+        (equippedArmor?.socketAtkBonus ?? 0) +
+        (equippedAccessory?.socketAtkBonus ?? 0);
+    return baseAtk * (1.0 + allAffixAtkPercent);
+  }
 
-  /// Crit Rate: LUK * 0.5% + Equipment + Passives + Set Bonus (capped at 50%)
+  /// Crit Rate: LUK * 0.5% + Equipment + Passives + Set Bonus + Sockets (capped at 60%)
   double get critRate {
     double rate = totalStats.critRate;
     if (equippedWeapon != null) rate += equippedWeapon!.critRate;
     if (equippedAccessory != null) rate += equippedAccessory!.critRate;
+    rate += allEquippedSocketCrit;
     final frenzyRank = skillLevels['frenzy'] ?? 0;
     rate += frenzyRank * 0.05; // +5% per rank
     if (hasSetBonus2('loi_dinh')) {
       rate += 0.10; // +10% Crit rate from Lôi Đình 2-piece set bonus
     }
-    return min(0.50, rate);
+    return min(0.60, rate);
   }
 
-  /// Crit Damage: Base 150% + Frenzy bonus (Capped at 250%)
+  /// Crit Damage: Base 150% + Frenzy bonus + Affixes (Capped at 300%)
   double get critDamageMultiplier {
     final frenzyRank = skillLevels['frenzy'] ?? 0;
-    final mult = 1.50 + (frenzyRank * 0.15);
-    return min(2.50, mult);
+    final mult = 1.50 + (frenzyRank * 0.15) + allAffixCritDmgPercent;
+    return min(3.00, mult);
   }
 
   /// Dodge chance: AGI * 0.3% (capped at 40%)
   double get dodgeRate => totalStats.dodgeRate;
 
-  /// Attack interval in seconds (AGI driven + prestige speed)
+  /// Attack interval in seconds (AGI driven + prestige speed + affixes)
   double get attackInterval {
     final base = totalStats.attackInterval;
     final speedLvl = prestigeNodeLevels['swift_speed'] ?? 0;
-    if (speedLvl > 0) {
-      return max(0.4, base / (1.0 + speedLvl * 0.10));
-    }
-    return base;
+    final speedMult = (1.0 + speedLvl * 0.10) * (1.0 + allAffixAttackSpeedPercent);
+    return max(0.35, base / speedMult);
   }
 
   /// Max active skill slots considering divine_aura prestige node
@@ -296,6 +380,9 @@ class Player {
     int? enlightenmentPoints,
     int? totalEnlightenmentEarned,
     Map<String, int>? prestigeNodeLevels,
+    Map<String, int>? gemInventory,
+    Map<String, int>? craftingMaterials,
+    List<String>? craftedRecipeIds,
   }) {
     return Player(
       name: name ?? this.name,
@@ -331,6 +418,9 @@ class Player {
       enlightenmentPoints: enlightenmentPoints ?? this.enlightenmentPoints,
       totalEnlightenmentEarned: totalEnlightenmentEarned ?? this.totalEnlightenmentEarned,
       prestigeNodeLevels: prestigeNodeLevels ?? this.prestigeNodeLevels,
+      gemInventory: gemInventory ?? this.gemInventory,
+      craftingMaterials: craftingMaterials ?? this.craftingMaterials,
+      craftedRecipeIds: craftedRecipeIds ?? this.craftedRecipeIds,
     );
   }
 
@@ -367,6 +457,9 @@ class Player {
         'enlightenmentPoints': enlightenmentPoints,
         'totalEnlightenmentEarned': totalEnlightenmentEarned,
         'prestigeNodeLevels': prestigeNodeLevels,
+        'gemInventory': gemInventory,
+        'craftingMaterials': craftingMaterials,
+        'craftedRecipeIds': craftedRecipeIds,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -428,5 +521,22 @@ class Player {
               (k, v) => MapEntry(k, v as int),
             ) ??
             const {},
+        gemInventory: (json['gemInventory'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            const {},
+        craftingMaterials: (json['craftingMaterials'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            const {
+              'iron': 0,
+              'crystal': 0,
+              'steel': 0,
+              'essence': 0,
+            },
+        craftedRecipeIds: (json['craftedRecipeIds'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            const [],
       );
 }

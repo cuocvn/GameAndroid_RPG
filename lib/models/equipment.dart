@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'equipment_affix.dart';
+import 'gem.dart';
 import 'stats.dart';
 
 enum EquipmentSlot {
@@ -78,6 +80,10 @@ class Equipment {
   final int sellPrice;
   final int upgradeLevel; // 0 to maxUpgradeLevel
   final String? setId; // Set bonus ID (viem_long, han_bang, loi_dinh, huyet_ma)
+  final int? bonusSockets; // Bonus sockets (e.g. from crafting)
+  final List<Gem> insertedGems;
+  final List<EquipmentAffix> affixes;
+  final int? lockedAffixIndex; // Index of locked affix during reforge
 
   const Equipment({
     required this.id,
@@ -97,22 +103,83 @@ class Equipment {
     this.sellPrice = 50,
     this.upgradeLevel = 0,
     this.setId,
+    this.bonusSockets,
+    this.insertedGems = const [],
+    this.affixes = const [],
+    this.lockedAffixIndex,
   });
+
+  /// Socket system rules:
+  /// Common/Uncommon: 0
+  /// Rare: 1
+  /// Epic: 2
+  /// Legendary/Mythic: 3
+  /// Set items: +1 socket
+  int get maxSockets {
+    int base = 0;
+    switch (rarity) {
+      case EquipmentRarity.common:
+      case EquipmentRarity.uncommon:
+        base = 0;
+        break;
+      case EquipmentRarity.rare:
+        base = 1;
+        break;
+      case EquipmentRarity.epic:
+        base = 2;
+        break;
+      case EquipmentRarity.legendary:
+        base = 3;
+        break;
+    }
+    if (setId != null) base += 1;
+    if (bonusSockets != null) base += bonusSockets!;
+    return base;
+  }
+
+  // Socket Gem stat additions
+  int get socketAtkBonus => insertedGems.fold(0, (acc, g) => acc + g.atkBonus);
+  int get socketHpBonus => insertedGems.fold(0, (acc, g) => acc + g.hpBonus);
+  int get socketDefBonus => insertedGems.fold(0, (acc, g) => acc + g.defBonus);
+  double get socketCritBonus => insertedGems.fold(0.0, (acc, g) => acc + g.critBonus);
+  double get socketManaRegenBonus => insertedGems.fold(0.0, (acc, g) => acc + g.manaRegenBonus);
+
+  // Affix stat additions
+  double get affixAtkPercent =>
+      affixes.where((a) => a.type == AffixType.atkPercent).fold(0.0, (acc, a) => acc + a.value);
+  double get affixHpPercent =>
+      affixes.where((a) => a.type == AffixType.hpPercent).fold(0.0, (acc, a) => acc + a.value);
+  double get affixCritDmgPercent =>
+      affixes.where((a) => a.type == AffixType.critDmgPercent).fold(0.0, (acc, a) => acc + a.value);
+  double get affixAttackSpeedPercent =>
+      affixes.where((a) => a.type == AffixType.attackSpeedPercent).fold(0.0, (acc, a) => acc + a.value);
+  double get affixElementalResistPercent =>
+      affixes.where((a) => a.type == AffixType.elementalResistPercent).fold(0.0, (acc, a) => acc + a.value);
+  double get affixLifestealPercent =>
+      affixes.where((a) => a.type == AffixType.lifestealPercent).fold(0.0, (acc, a) => acc + a.value);
 
   int get maxUpgradeLevel =>
       (rarity == EquipmentRarity.epic || rarity == EquipmentRarity.legendary) ? 10 : 5;
 
   double get upgradeMultiplier => 1.0 + (upgradeLevel * 0.10);
 
-  int get effectiveFlatAtk => (flatAtk * upgradeMultiplier).round();
-  int get effectiveFlatDef => (flatDef * upgradeMultiplier).round();
-  int get effectiveFlatHp => (flatHp * upgradeMultiplier).round();
+  int get effectiveFlatAtk => (flatAtk * upgradeMultiplier).round() + socketAtkBonus;
+  int get effectiveFlatDef => (flatDef * upgradeMultiplier).round() + socketDefBonus;
+  int get effectiveFlatHp => (flatHp * upgradeMultiplier).round() + socketHpBonus;
 
   // Upgrade costs
   int get upgradeGoldCost => (sellPrice * 0.8 * (upgradeLevel + 1)).round() + 40;
   int get upgradeGemsCost => 1 + (upgradeLevel ~/ 2);
 
-  Equipment copyWith({int? upgradeLevel, String? setId}) {
+  Equipment copyWith({
+    int? upgradeLevel,
+    String? setId,
+    int? bonusSockets,
+    List<Gem>? insertedGems,
+    List<EquipmentAffix>? affixes,
+    int? lockedAffixIndex,
+    bool clearLockedAffix = false,
+  }) {
     return Equipment(
       id: id,
       name: name,
@@ -131,6 +198,10 @@ class Equipment {
       sellPrice: sellPrice,
       upgradeLevel: upgradeLevel ?? this.upgradeLevel,
       setId: setId ?? this.setId,
+      bonusSockets: bonusSockets ?? this.bonusSockets,
+      insertedGems: insertedGems ?? this.insertedGems,
+      affixes: affixes ?? this.affixes,
+      lockedAffixIndex: clearLockedAffix ? null : (lockedAffixIndex ?? this.lockedAffixIndex),
     );
   }
 
@@ -152,6 +223,10 @@ class Equipment {
         'sellPrice': sellPrice,
         'upgradeLevel': upgradeLevel,
         'setId': setId,
+        'bonusSockets': bonusSockets,
+        'insertedGems': insertedGems.map((g) => g.toJson()).toList(),
+        'affixes': affixes.map((a) => a.toJson()).toList(),
+        'lockedAffixIndex': lockedAffixIndex,
       };
 
   factory Equipment.fromJson(Map<String, dynamic> json) => Equipment(
@@ -174,5 +249,15 @@ class Equipment {
         sellPrice: json['sellPrice'] as int? ?? 50,
         upgradeLevel: json['upgradeLevel'] as int? ?? 0,
         setId: json['setId'] as String?,
+        bonusSockets: json['bonusSockets'] as int?,
+        insertedGems: (json['insertedGems'] as List<dynamic>?)
+                ?.map((e) => Gem.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        affixes: (json['affixes'] as List<dynamic>?)
+                ?.map((e) => EquipmentAffix.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        lockedAffixIndex: json['lockedAffixIndex'] as int?,
       );
 }

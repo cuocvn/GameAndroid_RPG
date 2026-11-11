@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../models/equipment.dart';
+import '../models/gem.dart';
 import '../theme/app_theme.dart';
+import 'socket_row_widget.dart';
 
 class EquipmentCard extends StatelessWidget {
   final Equipment item;
@@ -12,6 +14,8 @@ class EquipmentCard extends StatelessWidget {
   final VoidCallback? onUnequip;
   final VoidCallback? onUpgrade;
   final VoidCallback? onSell;
+  final VoidCallback? onReforge;
+  final Function(int socketIndex, Gem? gem)? onTapSocket;
 
   const EquipmentCard({
     super.key,
@@ -21,6 +25,8 @@ class EquipmentCard extends StatelessWidget {
     this.onUnequip,
     this.onUpgrade,
     this.onSell,
+    this.onReforge,
+    this.onTapSocket,
   });
 
   @override
@@ -148,6 +154,31 @@ class EquipmentCard extends StatelessWidget {
                           _buildStatChip('VIT +${item.bonusStats.vit}', Colors.green.shade300),
                       ],
                     ),
+                    if (item.affixes.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: item.affixes
+                            .map((a) => _buildStatChip(a.description, Colors.purpleAccent))
+                            .toList(),
+                      ),
+                    ],
+                    if (item.insertedGems.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: item.insertedGems
+                            .map((g) => _buildStatChip('${g.type.emoji} ${g.bonusDescription}', g.type.color))
+                            .toList(),
+                      ),
+                    ],
+                    if (item.maxSockets > 0)
+                      SocketRowWidget(
+                        item: item,
+                        onTapSocket: onTapSocket,
+                      ),
                   ],
                 ),
               ),
@@ -155,10 +186,23 @@ class EquipmentCard extends StatelessWidget {
           ),
 
           const SizedBox(height: 10),
-          // Action Buttons (Equip, Unequip, Upgrade, Sell)
+          // Action Buttons (Equip, Unequip, Upgrade, Sell, Reforge)
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (onReforge != null && item.rarity.index >= EquipmentRarity.rare.index)
+                TextButton.icon(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onReforge?.call();
+                  },
+                  icon: const Icon(Icons.casino, size: 14, color: Colors.purpleAccent),
+                  label: const Text('Reforge', style: TextStyle(fontSize: 11, color: Colors.purpleAccent)),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                  ),
+                ),
               if (onSell != null && !isEquipped)
                 TextButton.icon(
                   onPressed: () {

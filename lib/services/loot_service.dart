@@ -2,6 +2,8 @@ import 'dart:math';
 import '../data/seed_equipment.dart';
 import '../models/enemy.dart';
 import '../models/equipment.dart';
+import '../models/equipment_affix.dart';
+import '../models/gem.dart';
 import '../models/player.dart';
 import '../models/stats.dart';
 
@@ -110,6 +112,93 @@ class LootService {
     }
   }
 
+  static List<EquipmentAffix> rollAffixesForRarity(EquipmentRarity rarity) {
+    if (rarity == EquipmentRarity.common || rarity == EquipmentRarity.uncommon) {
+      return const [];
+    }
+    final int count = rarity == EquipmentRarity.rare ? 1 : 2;
+    final List<EquipmentAffix> list = [];
+    final List<AffixType> exclude = [];
+    for (int i = 0; i < count; i++) {
+      final a = EquipmentAffix.rollRandom(excludeTypes: exclude);
+      list.add(a);
+      exclude.add(a.type);
+    }
+    return list;
+  }
+
+  static List<Gem> rollGems({
+    required Enemy enemy,
+    required Player player,
+  }) {
+    final List<Gem> gems = [];
+    // 1. Zone Bosses: 70% chance to drop Topaz (Crit gem)
+    if (enemy.isBoss && enemy.zone != 99) {
+      if (_rng.nextDouble() < 0.70) {
+        final lvl = enemy.zone >= 4 ? (_rng.nextBool() ? 2 : 1) : 1;
+        gems.add(Gem(type: GemType.topaz, level: lvl));
+      }
+    }
+
+    // 2. Endless mode even floors: 50% chance to drop Amethyst (Mana regen gem)
+    if (enemy.zone == 99 && enemy.stage % 2 == 0) {
+      if (_rng.nextDouble() < 0.50) {
+        final lvl = enemy.stage >= 20 ? (_rng.nextBool() ? 2 : 1) : 1;
+        gems.add(Gem(type: GemType.amethyst, level: lvl));
+      }
+    }
+
+    // 3. Regular monster drops (Ruby, Sapphire, Emerald) - 15% chance
+    if (_rng.nextDouble() < 0.15) {
+      final pool = [GemType.ruby, GemType.sapphire, GemType.emerald];
+      final pickedType = pool[_rng.nextInt(pool.length)];
+      int lvl = 1;
+      if (enemy.zone == 5 || (enemy.zone == 99 && enemy.stage >= 15)) {
+        if (_rng.nextDouble() < 0.20) lvl = 2;
+      }
+      gems.add(Gem(type: pickedType, level: lvl));
+    }
+
+    return gems;
+  }
+
+  static Map<String, int> rollCraftingMaterials({
+    required Enemy enemy,
+    required Player player,
+  }) {
+    final Map<String, int> mats = {};
+
+    // Sắt Cổ (iron) - Zone 1-2 (45% chance for 1-2)
+    if (enemy.zone == 1 || enemy.zone == 2) {
+      if (_rng.nextDouble() < 0.45) {
+        mats['iron'] = 1 + (_rng.nextBool() ? 1 : 0);
+      }
+    }
+
+    // Pha Lê Ma Pháp (crystal) - Zone 3-4 (40% chance for 1-2)
+    if (enemy.zone == 3 || enemy.zone == 4) {
+      if (_rng.nextDouble() < 0.40) {
+        mats['crystal'] = 1 + (_rng.nextBool() ? 1 : 0);
+      }
+    }
+
+    // Hắc Kim (steel) - Zone 5 or Endless 10+ (35% chance for 1-2)
+    if (enemy.zone == 5 || (enemy.zone == 99 && enemy.stage >= 10)) {
+      if (_rng.nextDouble() < 0.35) {
+        mats['steel'] = 1 + (_rng.nextBool() ? 1 : 0);
+      }
+    }
+
+    // Tinh Hoa Hỗn Mang (essence) - Bosses or Endless 20+ (30% chance for 1)
+    if (enemy.isBoss || (enemy.zone == 99 && enemy.stage >= 20)) {
+      if (_rng.nextDouble() < 0.30) {
+        mats['essence'] = 1;
+      }
+    }
+
+    return mats;
+  }
+
   static Equipment _generateOrPickItem({
     required EquipmentRarity rarity,
     required int zone,
@@ -152,6 +241,7 @@ class LootService {
           sellPrice: picked.sellPrice,
           upgradeLevel: 0,
           setId: picked.setId,
+          affixes: rollAffixesForRarity(picked.rarity),
         );
       }
     }
@@ -181,6 +271,7 @@ class LootService {
         sellPrice: picked.sellPrice,
         upgradeLevel: 0,
         setId: picked.setId,
+        affixes: rollAffixesForRarity(picked.rarity),
       );
     }
 
@@ -274,6 +365,7 @@ class LootService {
       bonusStats: bonusStats,
       emoji: emoji,
       sellPrice: (25 * multiplier).round(),
+      affixes: rollAffixesForRarity(rarity),
     );
   }
 }

@@ -1,11 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:game_and/models/crafting_recipe.dart';
 import 'package:game_and/models/equipment.dart';
+import 'package:game_and/models/equipment_affix.dart';
+import 'package:game_and/models/gem.dart';
 import 'package:game_and/models/player.dart';
 import 'package:game_and/models/stats.dart';
 import 'package:game_and/models/skill.dart';
 import 'package:game_and/data/seed_equipment.dart';
 import 'package:game_and/data/seed_skills.dart';
 import 'package:game_and/data/seed_enemies.dart';
+import 'package:game_and/providers/game_providers.dart';
 
 void main() {
   test('Player initial stats and combat formulas calculation', () {
@@ -287,5 +292,261 @@ void main() {
     expect(b5.bossSkills[1].name, 'Đòn Tối Thượng');
     expect(b5.bossSkills[1].cooldown, 20.0);
     expect(b5.bossSkills[1].damageMultiplier, 4.0);
+  });
+
+  test('Gem Sockets: socket capacity by rarity, gem stat scaling, insertion and unequip without loss', () {
+    // 1. Check socket capacity by rarity rules
+    const commonItem = Equipment(id: 'c1', name: 'Gỗ', description: '', slot: EquipmentSlot.weapon, rarity: EquipmentRarity.common);
+    const rareItem = Equipment(id: 'r1', name: 'Hiếm', description: '', slot: EquipmentSlot.weapon, rarity: EquipmentRarity.rare);
+    const epicItem = Equipment(id: 'e1', name: 'Sử Thi', description: '', slot: EquipmentSlot.armor, rarity: EquipmentRarity.epic);
+    const legItem = Equipment(id: 'l1', name: 'Huyền Thoại', description: '', slot: EquipmentSlot.accessory, rarity: EquipmentRarity.legendary);
+    const setEpicItem = Equipment(id: 'se1', name: 'Set Piece', description: '', slot: EquipmentSlot.armor, rarity: EquipmentRarity.epic, setId: 'viem_long');
+
+    expect(commonItem.maxSockets, 0);
+    expect(rareItem.maxSockets, 1);
+    expect(epicItem.maxSockets, 2);
+    expect(legItem.maxSockets, 3);
+    expect(setEpicItem.maxSockets, 3); // Epic (2) + Set bonus (+1) = 3 sockets!
+
+    // 2. Gem stat scaling (5 colors x 5 levels)
+    const rubyL1 = Gem(type: GemType.ruby, level: 1);
+    const rubyL5 = Gem(type: GemType.ruby, level: 5);
+    expect(rubyL1.atkBonus, 5);
+    expect(rubyL5.atkBonus, 40);
+
+    const sapphireL1 = Gem(type: GemType.sapphire, level: 1);
+    const sapphireL5 = Gem(type: GemType.sapphire, level: 5);
+    expect(sapphireL1.hpBonus, 100);
+    expect(sapphireL5.hpBonus, 800);
+
+    const emeraldL1 = Gem(type: GemType.emerald, level: 1);
+    const emeraldL5 = Gem(type: GemType.emerald, level: 5);
+    expect(emeraldL1.defBonus, 3);
+    expect(emeraldL5.defBonus, 25);
+
+    const topazL1 = Gem(type: GemType.topaz, level: 1);
+    const topazL5 = Gem(type: GemType.topaz, level: 5);
+    expect(topazL1.critBonus, 0.02);
+    expect(topazL5.critBonus, 0.08);
+
+    const amethystL1 = Gem(type: GemType.amethyst, level: 1);
+    const amethystL5 = Gem(type: GemType.amethyst, level: 5);
+    expect(amethystL1.manaRegenBonus, 0.5);
+    expect(amethystL5.manaRegenBonus, 4.0);
+
+    // 3. Socket insertion and player stat additions
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              equippedWeapon: rareItem,
+              gemInventory: {'ruby_1': 3, 'sapphire_1': 2},
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final initialAtk = container.read(playerProvider).physicalAtk;
+
+    // Insert Ruby 1 into equipped weapon (+5 ATK)
+    final inserted = notifier.insertGem(itemId: 'r1', gem: rubyL1);
+    expect(inserted, true);
+    expect(container.read(playerProvider).equippedWeapon!.insertedGems.length, 1);
+    expect(container.read(playerProvider).equippedWeapon!.insertedGems.first, rubyL1);
+    expect(container.read(playerProvider).gemInventory['ruby_1'], 2); // 1 consumed
+    expect(container.read(playerProvider).physicalAtk, initialAtk + 5);
+
+    // Cannot insert beyond maxSockets (rareItem maxSockets = 1)
+    final insertSecond = notifier.insertGem(itemId: 'r1', gem: rubyL1);
+    expect(insertSecond, false);
+
+    // Remove gem: returns to bag without loss
+    final removed = notifier.removeGem(itemId: 'r1', socketIndex: 0);
+    expect(removed, true);
+    expect(container.read(playerProvider).equippedWeapon!.insertedGems.isEmpty, true);
+    expect(container.read(playerProvider).gemInventory['ruby_1'], 3); // Returned to bag!
+    expect(container.read(playerProvider).physicalAtk, initialAtk);
+
+    // 4. Fuse All Gems (Ghép tất cả)
+    notifier.setPlayer(
+      container.read(playerProvider).copyWith(
+        gold: 500,
+        gemInventory: {'ruby_1': 3},
+      ),
+    );
+    final fused = notifier.fuseAllGems();
+    expect(fused, 1);
+    expect(container.read(playerProvider).gemInventory['ruby_1'], null); // Consumed 3
+    expect(container.read(playerProvider).gemInventory['ruby_2'], 1); // Upgraded to 1 ruby_2
+    expect(container.read(playerProvider).gold, 450); // 500 - 50 = 450
+  });
+
+  test('Crafting: recipe progression, material consumption, and random item generation with set chance', () {
+    expect(CraftingRecipe.allRecipes.length, greaterThanOrEqualTo(8));
+
+    final recipeUncommon = CraftingRecipe.allRecipes.firstWhere((r) => r.id == 'cr_uncommon_weapon');
+    expect(recipeUncommon.requiredLevel, 5);
+    expect(recipeUncommon.requiredMaterials['iron'], 5);
+
+    final recipeSet = CraftingRecipe.allRecipes.firstWhere((r) => r.id == 'cr_set_piece');
+    expect(recipeSet.requiredLevel, 25);
+    expect(recipeSet.isSetPiece, true);
+
+    // Player with insufficient level cannot craft
+    final lowContainer = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              level: 3,
+              gold: 1000,
+              craftingMaterials: {'iron': 10},
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(lowContainer.dispose);
+    final lowLevelPlayer = lowContainer.read(playerProvider.notifier);
+    expect(lowLevelPlayer.craftRecipe(recipeUncommon), isNull);
+
+    // Player with sufficient level and materials crafts successfully
+    final readyContainer = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              level: 6,
+              gold: 500,
+              craftingMaterials: {'iron': 10},
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(readyContainer.dispose);
+    final readyPlayer = readyContainer.read(playerProvider.notifier);
+    final craftedItem = readyPlayer.craftRecipe(recipeUncommon);
+    expect(craftedItem, isNotNull);
+    expect(craftedItem!.rarity, EquipmentRarity.uncommon);
+    expect(craftedItem.slot, EquipmentSlot.weapon);
+    expect(readyContainer.read(playerProvider).gold, 300); // 500 - 200 = 300
+    expect(readyContainer.read(playerProvider).craftingMaterials['iron'], 5); // 10 - 5 = 5
+    expect(readyContainer.read(playerProvider).craftedRecipeIds.contains('cr_uncommon_weapon'), true);
+
+    // Set piece crafting produces item with setId
+    final masterContainer = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              level: 30,
+              gold: 10000,
+              craftingMaterials: {'essence': 20, 'steel': 10},
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(masterContainer.dispose);
+    final masterPlayer = masterContainer.read(playerProvider.notifier);
+    final craftedSetPiece = masterPlayer.craftRecipe(recipeSet);
+    expect(craftedSetPiece, isNotNull);
+    expect(craftedSetPiece!.setId, isNotNull);
+  });
+
+  test('Reforge: random affix rolling without duplicates, cost deduction, and stat modification', () {
+    // 1. Verify rollRandom with excludeTypes never duplicates
+    final exclude = [AffixType.atkPercent, AffixType.hpPercent];
+    for (int i = 0; i < 20; i++) {
+      final rolled = EquipmentAffix.rollRandom(excludeTypes: exclude);
+      expect(exclude.contains(rolled.type), false);
+    }
+
+    // 2. Reforge workflow with PlayerNotifier
+    const initialAffix = EquipmentAffix(type: AffixType.hpPercent, value: 0.10);
+    const rareSword = Equipment(
+      id: 'sword_reforge',
+      name: 'Kiếm Ma Thuật',
+      description: '',
+      slot: EquipmentSlot.weapon,
+      rarity: EquipmentRarity.rare,
+      affixes: [initialAffix],
+    );
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              gold: 1000,
+              gems: 5,
+              craftingMaterials: {'crystal': 5},
+              inventory: [rareSword],
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+
+    const newCandidate = EquipmentAffix(type: AffixType.atkPercent, value: 0.12);
+    final success = notifier.payAndApplyReforge(
+      itemId: 'sword_reforge',
+      affixIndex: 0,
+      newAffix: newCandidate,
+    );
+
+    expect(success, true);
+    final updatedSword = container.read(playerProvider).inventory.firstWhere((e) => e.id == 'sword_reforge');
+    expect(updatedSword.affixes.first.type, AffixType.atkPercent);
+    expect(updatedSword.affixes.first.value, 0.12);
+    expect(container.read(playerProvider).gold, 500); // 1000 - 500 = 500
+    expect(container.read(playerProvider).craftingMaterials['crystal'], 4); // 5 - 1 = 4
+  });
+
+  test('Transmute: 3 items of same rarity combine into higher rarity and failure handling', () {
+    const item1 = Equipment(id: 'c_1', name: 'C1', description: '', slot: EquipmentSlot.weapon, rarity: EquipmentRarity.common);
+    const item2 = Equipment(id: 'c_2', name: 'C2', description: '', slot: EquipmentSlot.armor, rarity: EquipmentRarity.common);
+    const item3 = Equipment(id: 'c_3', name: 'C3', description: '', slot: EquipmentSlot.accessory, rarity: EquipmentRarity.common);
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              gold: 500,
+              inventory: [item1, item2, item3],
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+
+    // Transmute 3 Common -> 1 Uncommon (Cost 100 gold)
+    final transmuted = notifier.transmuteEquipment(['c_1', 'c_2', 'c_3']);
+    expect(transmuted, isNotNull);
+    expect(transmuted!.rarity, EquipmentRarity.uncommon);
+    expect(container.read(playerProvider).gold, 400); // 500 - 100 = 400
+    expect(container.read(playerProvider).inventory.length, 1);
+    expect(container.read(playerProvider).inventory.first.id, transmuted.id);
+
+    // Cannot transmute if items are of different rarities
+    const diffItem = Equipment(id: 'r_1', name: 'R1', description: '', slot: EquipmentSlot.armor, rarity: EquipmentRarity.rare);
+    notifier.setPlayer(
+      container.read(playerProvider).copyWith(
+        inventory: [item1, item2, diffItem],
+      ),
+    );
+    expect(notifier.transmuteEquipment(['c_1', 'c_2', 'r_1']), isNull);
   });
 }

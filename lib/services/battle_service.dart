@@ -332,7 +332,8 @@ class BattleService {
     // Tactical AI Priority: If Hero HP < 70% and a healing skill is off cooldown, prioritize healing!
     if (_heroHp < _heroMaxHp * 0.70) {
       for (final skillId in player.equippedSkillIds) {
-        final skill = SeedSkills.getById(skillId);
+        final rawSkill = SeedSkills.getById(skillId);
+        final skill = rawSkill.copyWith(level: player.skillLevels[skillId] ?? 1);
         final cd = _cooldowns[skillId] ?? 0.0;
         if (skill.healsHero && _heroMana >= skill.manaCost && cd <= 0.0) {
           chosenSkill = skill;
@@ -343,7 +344,8 @@ class BattleService {
 
     if (chosenSkill == null) {
       for (final skillId in player.equippedSkillIds) {
-        final skill = SeedSkills.getById(skillId);
+        final rawSkill = SeedSkills.getById(skillId);
+        final skill = rawSkill.copyWith(level: player.skillLevels[skillId] ?? 1);
         final cd = _cooldowns[skillId] ?? 0.0;
 
         if (skill.type == SkillType.active) {
@@ -357,7 +359,7 @@ class BattleService {
       }
     }
 
-    chosenSkill ??= SeedSkills.getById('fireball');
+    chosenSkill ??= SeedSkills.getById('fireball').copyWith(level: player.skillLevels['fireball'] ?? 1);
 
     // Handle Active Skill trigger & Banner
     if (chosenSkill.type == SkillType.active) {
@@ -743,6 +745,9 @@ class BattleService {
 
   void _addFloatingText(String text, Color color,
       {bool isCrit = false, bool isHeroTarget = false}) {
+    if (_floatingTexts.length >= 20) {
+      _floatingTexts.removeAt(0);
+    }
     _floatingTexts.add(FloatingText(
       id: '${DateTime.now().microsecondsSinceEpoch}_${_rng.nextInt(1000)}',
       text: text,

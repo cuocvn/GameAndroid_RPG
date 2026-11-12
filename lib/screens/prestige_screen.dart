@@ -161,8 +161,8 @@ class _PrestigeScreenState extends ConsumerState<PrestigeScreen> {
           ),
         ),
         content: Text(
-          'Tiêu tốn 5 💎 để thu hồi lại toàn bộ 100% Điểm Ngộ Đạo đã đầu tư vào các nhánh buff vĩnh viễn. Bạn có thể tự do phân phối lại!',
-          style: GoogleFonts.inter(color: Colors.white70),
+          'Xác nhận tốn 5 💎 để tẩy điểm Ngộ Đạo?\nToàn bộ 100% Điểm Ngộ Đạo đã đầu tư vào các nhánh buff vĩnh viễn sẽ được hoàn trả đầy đủ để bạn phân phối lại!',
+          style: GoogleFonts.inter(color: Colors.white70, height: 1.4),
         ),
         actions: [
           TextButton(

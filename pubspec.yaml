@@ -1,5 +1,5 @@
 name: game_and
-description: "Offline Tactical Idle RPG in Flutter"
+description: "Vô Ảnh Chiến Ký - Offline Tactical Idle RPG"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -21,16 +21,31 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/icon/app_icon_background.png"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+
+flutter_native_splash:
+  color: "#0D0B14"
+  image: "assets/icon/splash_logo.png"
+  android_12:
+    color: "#0D0B14"
+    image: "assets/icon/splash_logo.png"
+    icon_background_color: "#0D0B14"
 
 flutter:
   uses-material-design: true
 
   assets:
+    - assets/icon/
     - assets/img/
     - assets/img/characters/
     - assets/img/equipment/
     - assets/img/monsters/
-    - asset/img/
-    - asset/img/characters/
-    - asset/img/equipment/
-    - asset/img/monsters/

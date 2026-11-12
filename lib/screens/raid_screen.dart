@@ -548,12 +548,50 @@ class _RaidScreenState extends ConsumerState<RaidScreen>
           onPressed: player.dailyStaminaPurchases < 3 && player.gems >= 1
               ? () {
                   HapticFeedback.lightImpact();
-                  final success = ref.read(playerProvider.notifier).buyRaidStamina();
-                  if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Đã mua +5 Thể Lực Raid thành công!')),
-                    );
-                  }
+                  showDialog(
+                    context: context,
+                    builder: (dialogCtx) => AlertDialog(
+                      backgroundColor: AppTheme.bgSurface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+                      ),
+                      title: Text(
+                        'XÁC NHẬN MUA THỂ LỰC',
+                        style: GoogleFonts.cinzel(
+                          color: AppTheme.goldAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      content: const Text(
+                        'Xác nhận tốn 1 💎 để mua 5 vé khiêu chiến?',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx),
+                          child: const Text('Hủy', style: TextStyle(color: Colors.white60)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.goldAccent,
+                            foregroundColor: Colors.black,
+                          ),
+                          onPressed: () {
+                            Navigator.pop(dialogCtx);
+                            final success = ref.read(playerProvider.notifier).buyRaidStamina();
+                            if (success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Đã mua +5 Thể Lực Raid thành công!')),
+                              );
+                            }
+                          },
+                          child: const Text('Xác nhận (1 💎)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
                 }
               : null,
           child: Text(

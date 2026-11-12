@@ -248,9 +248,9 @@ class SeedEnemies {
             zone: 2,
             stage: 5,
             isBoss: true,
-            maxHp: 3900, // 6x quái thường
-            atk: 123, // 2.2x quái thường
-            def: 19, // +20% DEF
+            maxHp: 2600, // Cân bằng 4x quái thường
+            atk: 80, // 1.45x quái thường
+            def: 18, // +15% DEF
             agi: 6,
             critRate: 0.15,
             expReward: 420,
@@ -354,9 +354,9 @@ class SeedEnemies {
             zone: 3,
             stage: 5,
             isBoss: true,
-            maxHp: 7020, // 6x quái thường
-            atk: 191, // 2.2x quái thường
-            def: 31, // +20% DEF
+            maxHp: 4800, // Cân bằng 4x quái thường
+            atk: 120, // 1.4x quái thường
+            def: 26, // +15% DEF
             agi: 6,
             critRate: 0.18,
             magicResistPercent: 0.40,
@@ -463,9 +463,9 @@ class SeedEnemies {
             zone: 4,
             stage: 5,
             isBoss: true,
-            maxHp: 6000, // 6x quái thường
-            atk: 155, // 2.2x quái thường
-            def: 34, // +20% DEF
+            maxHp: 5200, // Cân bằng 4x quái thường
+            atk: 130, // 1.35x quái thường
+            def: 28, // +15% DEF
             agi: 6,
             critRate: 0.15,
             reflectDamagePercent: 0.20,
@@ -571,12 +571,12 @@ class SeedEnemies {
             zone: 5,
             stage: 5,
             isBoss: true,
-            maxHp: 22680, // 6x quái thường
-            atk: 460, // 2.2x quái thường
-            def: 72, // +20% DEF
+            maxHp: 13500, // Cân bằng 4x quái thường
+            atk: 220, // 1.4x quái thường
+            def: 55, // +15% DEF
             agi: 8,
-            critRate: 0.25,
-            hpRegenPercentPerSecond: 0.05,
+            critRate: 0.22,
+            hpRegenPercentPerSecond: 0.02, // 2% hồi máu/giây (270 HP/s)
             expReward: 5000,
             goldReward: 4200,
             imageAsset: AssetMapping.monsterZone5,

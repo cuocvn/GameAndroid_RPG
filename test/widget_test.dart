@@ -848,4 +848,304 @@ void main() {
     notifier.initRaidWeekIfNeeded();
     expect(container.read(playerProvider).raidStamina, 13);
   });
+
+  test('Offline progress: 1 hour auto-farm grants 60% exp and gold rewards', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final oneHourAgo = now - 3600 * 1000;
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            Player(
+              level: 5,
+              currentExp: 0,
+              gold: 100,
+              lastActiveTimestamp: oneHourAgo,
+              isAutoFarming: true,
+              autoFarmZone: 1,
+              autoFarmStage: 1,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final enemy = SeedEnemies.getEnemy(1, 1);
+    const expectedBattles = 3600 ~/ 25; // 144 battles
+    final expectedExp = (expectedBattles * (enemy.expReward * 0.6).round());
+    final expectedGold = (expectedBattles * (enemy.goldReward * 0.6).round());
+
+    final result = notifier.calculateOfflineProgress(now);
+    expect(result, isNotNull);
+    expect(result!.hadAutoFarm, true);
+    expect(result.battlesWon, expectedBattles);
+    expect(result.expGained, expectedExp);
+    expect(result.goldGained, expectedGold);
+
+    // Claim rewards
+    notifier.claimOfflineProgress(result);
+    final updatedPlayer = container.read(playerProvider);
+    expect(updatedPlayer.gold, 100 + expectedGold);
+    expect(updatedPlayer.currentExp + (updatedPlayer.level > 5 ? 100 : 0), greaterThan(0));
+  });
+
+  test('Offline progress: 20 hours offline is capped at 8 hours and 200 battles', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final twentyHoursAgo = now - 20 * 3600 * 1000;
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            Player(
+              level: 10,
+              raidStamina: 5,
+              lastActiveTimestamp: twentyHoursAgo,
+              isAutoFarming: true,
+              autoFarmZone: 2,
+              autoFarmStage: 2,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final result = notifier.calculateOfflineProgress(now);
+    expect(result, isNotNull);
+    // Capped at 200 battles
+    expect(result!.battlesWon, 200);
+    // Stamina capped at 20 (gains 15)
+    expect(result.staminaRegenerated, 15);
+  });
+
+  test('Offline progress: without auto-farm, only stamina regenerates, no exp or gold', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final twoHoursAgo = now - 2 * 3600 * 1000;
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            Player(
+              raidStamina: 8,
+              lastActiveTimestamp: twoHoursAgo,
+              isAutoFarming: false,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final result = notifier.calculateOfflineProgress(now);
+    expect(result, isNotNull);
+    expect(result!.hadAutoFarm, false);
+    expect(result.battlesWon, 0);
+    expect(result.expGained, 0);
+    expect(result.goldGained, 0);
+    // 2 hours = 120 mins -> 24 stamina possible -> capped at 20 - 8 = 12
+    expect(result.staminaRegenerated, 12);
+  });
+
+  test('QoL 1: equipBestGear selects and equips highest combatPower gear from inventory', () {
+    const weakWeapon = Equipment(
+      id: 'w_weak',
+      name: 'Kiếm Gỗ',
+      description: '',
+      slot: EquipmentSlot.weapon,
+      rarity: EquipmentRarity.common,
+      flatAtk: 10,
+    );
+    const strongWeapon = Equipment(
+      id: 'w_strong',
+      name: 'Trảm Ma Kiếm',
+      description: '',
+      slot: EquipmentSlot.weapon,
+      rarity: EquipmentRarity.legendary,
+      flatAtk: 120,
+    );
+    const strongArmor = Equipment(
+      id: 'a_strong',
+      name: 'Thần Khải',
+      description: '',
+      slot: EquipmentSlot.armor,
+      rarity: EquipmentRarity.epic,
+      flatDef: 60,
+      flatHp: 500,
+    );
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              equippedWeapon: weakWeapon,
+              inventory: [strongWeapon, strongArmor],
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final changed = notifier.equipBestGear();
+    expect(changed, true);
+
+    final updatedPlayer = container.read(playerProvider);
+    expect(updatedPlayer.equippedWeapon?.id, 'w_strong');
+    expect(updatedPlayer.equippedArmor?.id, 'a_strong');
+    expect(updatedPlayer.inventory.any((e) => e.id == 'w_weak'), true);
+  });
+
+  test('Polish 1: Sound and Haptic feedback toggles', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    expect(container.read(playerProvider).isSoundEnabled, true);
+    expect(container.read(playerProvider).isHapticEnabled, true);
+
+    // Toggle off
+    notifier.toggleSound(false);
+    notifier.toggleHaptic(false);
+    expect(container.read(playerProvider).isSoundEnabled, false);
+    expect(container.read(playerProvider).isHapticEnabled, false);
+
+    // Toggle on
+    notifier.toggleSound(true);
+    notifier.toggleHaptic(true);
+    expect(container.read(playerProvider).isSoundEnabled, true);
+    expect(container.read(playerProvider).isHapticEnabled, true);
+  });
+
+  test('Polish 2: Consecutive defeats tracking and smart hint trigger', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    expect(container.read(playerProvider).consecutiveDefeats['1-5'], null);
+
+    // Defeat 1
+    notifier.onBattleDefeat(foughtZone: 1, foughtStage: 5);
+    expect(container.read(playerProvider).consecutiveDefeats['1-5'], 1);
+
+    // Defeat 2
+    notifier.onBattleDefeat(foughtZone: 1, foughtStage: 5);
+    expect(container.read(playerProvider).consecutiveDefeats['1-5'], 2);
+
+    // Defeat 3 -> triggers smart hint condition >= 3
+    notifier.onBattleDefeat(foughtZone: 1, foughtStage: 5);
+    expect(container.read(playerProvider).consecutiveDefeats['1-5'], 3);
+
+    // Victory clears consecutive defeats
+    notifier.onBattleVictory(exp: 50, gold: 30, drops: [], foughtZone: 1, foughtStage: 5);
+    expect(container.read(playerProvider).consecutiveDefeats['1-5'] ?? 0, 0);
+  });
+
+  test('Polish 3: Skip all tutorials sets all flags permanently', () {
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(
+          () => PlayerNotifier(
+            const Player(
+              hasSeenTutorialHome: false,
+              hasSeenTutorialFirstWin: false,
+              hasSeenTutorialFirstDrop: false,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    expect(container.read(playerProvider).hasSeenTutorialHome, false);
+    expect(container.read(playerProvider).hasSeenTutorialFirstWin, false);
+    expect(container.read(playerProvider).hasSeenTutorialFirstDrop, false);
+
+    notifier.skipAllTutorials();
+
+    final updated = container.read(playerProvider);
+    expect(updated.hasSeenTutorialHome, true);
+    expect(updated.hasSeenTutorialFirstWin, true);
+    expect(updated.hasSeenTutorialFirstDrop, true);
+  });
+
+  test('QA Sweep: Bag capacity limit (200 slots) and overflow gold conversion', () {
+    final gearList = List.generate(
+      200,
+      (i) => Equipment(
+        id: 'gear_$i',
+        name: 'Item $i',
+        description: 'Test gear',
+        slot: EquipmentSlot.weapon,
+        rarity: EquipmentRarity.common,
+        flatAtk: 10,
+      ),
+    );
+
+    final player = Player(inventory: gearList);
+    expect(player.isInventoryFull, true);
+    expect(player.inventory.length, Player.maxInventoryCapacity);
+
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith(() => PlayerNotifier(player)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(playerProvider.notifier);
+    final extraGear = const Equipment(
+      id: 'gear_extra',
+      name: 'Extra Sword',
+      description: 'Extra sword',
+      slot: EquipmentSlot.weapon,
+      rarity: EquipmentRarity.common,
+      flatAtk: 15,
+    );
+
+    final initialGold = container.read(playerProvider).gold;
+    notifier.onBattleVictory(
+      exp: 100,
+      gold: 50,
+      drops: [extraGear],
+      foughtZone: 1,
+      foughtStage: 1,
+    );
+
+    final afterVictory = container.read(playerProvider);
+    expect(afterVictory.inventory.length, Player.maxInventoryCapacity);
+    expect(afterVictory.gold, greaterThanOrEqualTo(initialGold + 50 + extraGear.sellPrice));
+  });
+
+  test('QA Sweep: Save JSON export and import fidelity', () {
+    const original = Player(
+      name: 'Chiến Thần',
+      title: 'Đệ Nhất Kiếm',
+      level: 25,
+      gold: 50000,
+      gems: 120,
+      highestEndlessFloor: 18,
+      currentHeroId: '003_valkyrie',
+    );
+
+    final jsonMap = original.toJson();
+    final restored = Player.fromJson(jsonMap);
+
+    expect(restored.name, original.name);
+    expect(restored.title, original.title);
+    expect(restored.level, original.level);
+    expect(restored.gold, original.gold);
+    expect(restored.gems, original.gems);
+    expect(restored.highestEndlessFloor, original.highestEndlessFloor);
+    expect(restored.currentHeroId, original.currentHeroId);
+  });
 }

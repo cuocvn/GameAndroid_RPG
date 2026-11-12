@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
-class StatRow extends StatelessWidget {
+class StatRow extends StatefulWidget {
   final String label;
   final String fullName;
   final int baseValue;
@@ -26,8 +26,49 @@ class StatRow extends StatelessWidget {
   });
 
   @override
+  State<StatRow> createState() => _StatRowState();
+}
+
+class _StatRowState extends State<StatRow> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulseScale = Tween<double>(begin: 1.0, end: 1.14).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    if (widget.canAllocate) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(StatRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.canAllocate && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    } else if (!widget.canAllocate && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bonus = totalValue - baseValue;
+    final bonus = widget.totalValue - widget.baseValue;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
@@ -36,7 +77,7 @@ class StatRow extends StatelessWidget {
         gradient: AppTheme.surfaceGradient,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: canAllocate
+          color: widget.canAllocate
               ? AppTheme.goldAccent.withOpacity(0.4)
               : Colors.white.withOpacity(0.08),
           width: 1.0,
@@ -57,16 +98,16 @@ class StatRow extends StatelessWidget {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.18),
+              color: widget.color.withOpacity(0.18),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(0.8), width: 1.5),
+              border: Border.all(color: widget.color.withOpacity(0.8), width: 1.5),
             ),
             child: Text(
-              label,
+              widget.label,
               style: GoogleFonts.cinzel(
                 fontWeight: FontWeight.w900,
                 fontSize: 14,
-                color: color,
+                color: widget.color,
               ),
             ),
           ),
@@ -80,7 +121,7 @@ class StatRow extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      fullName,
+                      widget.fullName,
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -89,7 +130,7 @@ class StatRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '$baseValue',
+                      '${widget.baseValue}',
                       style: GoogleFonts.cinzel(
                         fontWeight: FontWeight.w900,
                         fontSize: 15,
@@ -109,7 +150,7 @@ class StatRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  description,
+                  widget.description,
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: Colors.white54,
@@ -119,32 +160,35 @@ class StatRow extends StatelessWidget {
             ),
           ),
 
-          // Allocate "+" button
-          if (canAllocate)
-            InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                onAllocate?.call();
-              },
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  gradient: AppTheme.goldButtonGradient,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.goldAccent.withOpacity(0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.black,
-                  size: 22,
+          // Allocate "+" button with gentle pulse animation
+          if (widget.canAllocate)
+            ScaleTransition(
+              scale: _pulseScale,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  widget.onAllocate?.call();
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.goldButtonGradient,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.goldAccent.withOpacity(0.45),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.black,
+                    size: 22,
+                  ),
                 ),
               ),
             ),

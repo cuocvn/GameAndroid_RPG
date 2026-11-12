@@ -12,6 +12,7 @@ import '../models/equipment.dart';
 import '../models/equipment_affix.dart';
 import '../models/gem.dart';
 import '../models/hero_story.dart';
+import '../models/offline_progress.dart';
 import '../models/player.dart';
 import '../models/prestige_node.dart';
 import '../models/raid_boss.dart';
@@ -79,6 +80,15 @@ class PlayerNotifier extends Notifier<Player> {
       state = state.copyWith(hasSeenTutorialFirstDrop: true);
       _save();
     }
+  }
+
+  void skipAllTutorials() {
+    state = state.copyWith(
+      hasSeenTutorialHome: true,
+      hasSeenTutorialFirstWin: true,
+      hasSeenTutorialFirstDrop: true,
+    );
+    _save();
   }
 
   /// Change character portrait / appearance and name
@@ -353,6 +363,76 @@ class PlayerNotifier extends Notifier<Player> {
     _save();
   }
 
+  /// QoL: Automatically equips the best item in inventory for each slot based on combatPower
+  bool equipBestGear() {
+    bool changed = false;
+
+    // 1. Weapon
+    final allWeapons = [
+      if (state.equippedWeapon != null) state.equippedWeapon!,
+      ...state.inventory.where((e) => e.slot == EquipmentSlot.weapon),
+    ];
+    if (allWeapons.isNotEmpty) {
+      Equipment bestW = state.equippedWeapon ?? allWeapons.first;
+      int bestPower = state.combatPower;
+      for (final w in allWeapons) {
+        final pTest = state.copyWith(equippedWeapon: w);
+        if (pTest.combatPower > bestPower) {
+          bestPower = pTest.combatPower;
+          bestW = w;
+        }
+      }
+      if (bestW != state.equippedWeapon) {
+        equipItem(bestW);
+        changed = true;
+      }
+    }
+
+    // 2. Armor
+    final allArmors = [
+      if (state.equippedArmor != null) state.equippedArmor!,
+      ...state.inventory.where((e) => e.slot == EquipmentSlot.armor),
+    ];
+    if (allArmors.isNotEmpty) {
+      Equipment bestA = state.equippedArmor ?? allArmors.first;
+      int bestPower = state.combatPower;
+      for (final a in allArmors) {
+        final pTest = state.copyWith(equippedArmor: a);
+        if (pTest.combatPower > bestPower) {
+          bestPower = pTest.combatPower;
+          bestA = a;
+        }
+      }
+      if (bestA != state.equippedArmor) {
+        equipItem(bestA);
+        changed = true;
+      }
+    }
+
+    // 3. Accessory
+    final allAccs = [
+      if (state.equippedAccessory != null) state.equippedAccessory!,
+      ...state.inventory.where((e) => e.slot == EquipmentSlot.accessory),
+    ];
+    if (allAccs.isNotEmpty) {
+      Equipment bestAcc = state.equippedAccessory ?? allAccs.first;
+      int bestPower = state.combatPower;
+      for (final acc in allAccs) {
+        final pTest = state.copyWith(equippedAccessory: acc);
+        if (pTest.combatPower > bestPower) {
+          bestPower = pTest.combatPower;
+          bestAcc = acc;
+        }
+      }
+      if (bestAcc != state.equippedAccessory) {
+        equipItem(bestAcc);
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
   /// Unequips an item from the given slot
   void unequipItem(EquipmentSlot slot) {
     final newInventory = List<Equipment>.from(state.inventory);
@@ -560,7 +640,15 @@ class PlayerNotifier extends Notifier<Player> {
       gainedGems = 1;
     }
 
-    final newInventory = List<Equipment>.from(state.inventory)..addAll(drops);
+    final newInventory = List<Equipment>.from(state.inventory);
+    int bagOverflowGold = 0;
+    for (final item in drops) {
+      if (newInventory.length < Player.maxInventoryCapacity) {
+        newInventory.add(item);
+      } else {
+        bagOverflowGold += item.sellPrice;
+      }
+    }
 
     // Map progression & Endless progression
     int newMaxZone = state.maxUnlockedZone;
@@ -687,10 +775,13 @@ class PlayerNotifier extends Notifier<Player> {
       updatedHeroProgress[state.currentHeroId] = newLevel;
     }
 
+    final updatedDefeats = Map<String, int>.from(state.consecutiveDefeats)
+      ..remove('$foughtZone-$foughtStage');
+
     state = state.copyWith(
       level: newLevel,
       currentExp: newExp,
-      gold: state.gold + effectiveGold,
+      gold: state.gold + effectiveGold + bagOverflowGold,
       gems: state.gems + gainedGems,
       statPoints: state.statPoints + addedStatPoints,
       skillPoints: state.skillPoints + addedSkillPoints,
@@ -703,10 +794,35 @@ class PlayerNotifier extends Notifier<Player> {
       craftingMaterials: updatedMaterials,
       petFoods: updatedPetFoods,
       heroLevelProgress: updatedHeroProgress,
+      consecutiveDefeats: updatedDefeats,
+      lastInventoryAcquiredTime: drops.isNotEmpty
+          ? DateTime.now().millisecondsSinceEpoch
+          : state.lastInventoryAcquiredTime,
     );
 
     _save();
     return milestoneResult;
+  }
+
+  /// Record battle defeat to track consecutive failures for hint system
+  void onBattleDefeat({required int foughtZone, required int foughtStage}) {
+    final key = '$foughtZone-$foughtStage';
+    final current = state.consecutiveDefeats[key] ?? 0;
+    final updatedDefeats = Map<String, int>.from(state.consecutiveDefeats);
+    updatedDefeats[key] = current + 1;
+    state = state.copyWith(consecutiveDefeats: updatedDefeats);
+    _save();
+  }
+
+  /// Sound & Haptic Settings toggles
+  void toggleSound([bool? enabled]) {
+    state = state.copyWith(isSoundEnabled: enabled ?? !state.isSoundEnabled);
+    _save();
+  }
+
+  void toggleHaptic([bool? enabled]) {
+    state = state.copyWith(isHapticEnabled: enabled ?? !state.isHapticEnabled);
+    _save();
   }
 
   // --- Prestige / Chuyển Sinh System ---
@@ -1885,6 +2001,167 @@ class PlayerNotifier extends Notifier<Player> {
     );
     _save();
     return legendaryGear;
+  }
+
+  // --- Offline Progress & Auto-Farm System ---
+
+  void recordLastActiveTimestamp([int? timestamp]) {
+    state = state.copyWith(lastActiveTimestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch);
+    _save();
+  }
+
+  void toggleAutoFarm(int zone, int stage) {
+    if (state.isAutoFarming && state.autoFarmZone == zone && state.autoFarmStage == stage) {
+      state = state.copyWith(isAutoFarming: false);
+    } else {
+      state = state.copyWith(
+        isAutoFarming: true,
+        autoFarmZone: zone,
+        autoFarmStage: stage,
+      );
+    }
+    _save();
+  }
+
+  /// Calculates accumulated offline progress and rewards (60% rate, max 8h, max 200 battles)
+  OfflineProgressResult? calculateOfflineProgress([int? nowTimestamp]) {
+    final now = nowTimestamp ?? DateTime.now().millisecondsSinceEpoch;
+    if (state.lastActiveTimestamp <= 0) return null;
+
+    final diffMs = max(0, now - state.lastActiveTimestamp);
+    final offlineSeconds = diffMs ~/ 1000;
+    if (offlineSeconds < 60) return null; // Ít hơn 1 phút không tính popup
+
+    final effectiveOfflineSeconds = min(offlineSeconds, 8 * 3600); // Tối đa 8 giờ
+
+    // 1. Stamina raid regeneration: 1 per 5 mins (300s), max 20
+    final maxStaminaRecoverable = max(0, 20 - state.raidStamina);
+    final staminaGained = min(maxStaminaRecoverable, offlineSeconds ~/ 300);
+
+    // 2. Auto-farm check
+    if (!state.isAutoFarming) {
+      return OfflineProgressResult(
+        offlineSeconds: offlineSeconds,
+        staminaRegenerated: staminaGained,
+        stageName: '',
+        hadAutoFarm: false,
+      );
+    }
+
+    final zone = state.autoFarmZone;
+    final stage = state.autoFarmStage;
+    final enemy = SeedEnemies.getEnemy(zone, stage);
+    final zoneInfo = SeedEnemies.zones.firstWhere((z) => z.id == zone, orElse: () => SeedEnemies.zones.first);
+    final stageName = '${zoneInfo.name} (Ải $zone-$stage)';
+
+    const averageBattleSeconds = 25; // 25 giây mỗi trận
+    final rawBattles = effectiveOfflineSeconds ~/ averageBattleSeconds;
+    final battlesWon = min(200, rawBattles); // Tối đa 200 trận
+
+    // 60% offline rate
+    const double rate = 0.6;
+    final expPerBattle = (enemy.expReward * rate).round();
+    final goldPerBattle = (enemy.goldReward * rate).round();
+
+    final expGained = battlesWon * expPerBattle;
+    final goldGained = battlesWon * goldPerBattle;
+    final gemsGained = enemy.isBoss ? (battlesWon * 0.15 * rate).round() : 0;
+
+    final droppedItems = <Equipment>[];
+    final rng = Random(now + battlesWon);
+    for (int i = 0; i < battlesWon; i++) {
+      if (droppedItems.length < 6 && rng.nextDouble() < 0.05) {
+        droppedItems.addAll(LootService.rollLoot(enemy: enemy, player: state));
+      }
+    }
+
+    final droppedMaterials = <String, int>{
+      'iron': (battlesWon * 0.20 * rate).round(),
+      'crystal': zone >= 3 ? (battlesWon * 0.15 * rate).round() : 0,
+      'steel': zone >= 5 ? (battlesWon * 0.10 * rate).round() : 0,
+      'essence': enemy.isBoss ? (battlesWon * 0.05 * rate).round() : 0,
+    };
+
+    final droppedPetFoods = <String, int>{
+      'meat': (battlesWon * 0.25 * rate).round(),
+      'herb': (battlesWon * 0.20 * rate).round(),
+      'beast_stone': (enemy.isBoss || zone >= 3) ? (battlesWon * 0.10 * rate).round() : 0,
+    };
+
+    return OfflineProgressResult(
+      offlineSeconds: offlineSeconds,
+      battlesWon: battlesWon,
+      expGained: expGained,
+      goldGained: goldGained,
+      gemsGained: gemsGained,
+      staminaRegenerated: staminaGained,
+      droppedItems: droppedItems,
+      droppedMaterials: droppedMaterials,
+      droppedPetFoods: droppedPetFoods,
+      stageName: stageName,
+      hadAutoFarm: true,
+    );
+  }
+
+  /// Claims and applies the offline progress rewards
+  void claimOfflineProgress(OfflineProgressResult result) {
+    int newExp = state.currentExp + result.expGained;
+    int newLevel = state.level;
+    int addedStatPoints = 0;
+    int addedSkillPoints = 0;
+
+    while (true) {
+      final reqExp = newLevel * 100 + (newLevel * newLevel * 20);
+      if (newExp >= reqExp) {
+        newExp -= reqExp;
+        newLevel++;
+        addedStatPoints += 2;
+        addedSkillPoints += 1;
+      } else {
+        break;
+      }
+    }
+
+    final updatedMaterials = Map<String, int>.from(state.craftingMaterials);
+    for (final entry in result.droppedMaterials.entries) {
+      updatedMaterials[entry.key] = (updatedMaterials[entry.key] ?? 0) + entry.value;
+    }
+
+    final updatedPetFoods = Map<String, int>.from(state.petFoods);
+    for (final entry in result.droppedPetFoods.entries) {
+      updatedPetFoods[entry.key] = (updatedPetFoods[entry.key] ?? 0) + entry.value;
+    }
+
+    final newInv = List<Equipment>.from(state.inventory);
+    int bagOverflowGold = 0;
+    for (final item in result.droppedItems) {
+      if (newInv.length < Player.maxInventoryCapacity) {
+        newInv.add(item);
+      } else {
+        bagOverflowGold += item.sellPrice;
+      }
+    }
+
+    final updatedHeroProgress = Map<String, int>.from(state.heroLevelProgress);
+    if (newLevel > (updatedHeroProgress[state.currentHeroId] ?? 0)) {
+      updatedHeroProgress[state.currentHeroId] = newLevel;
+    }
+
+    state = state.copyWith(
+      level: newLevel,
+      currentExp: newExp,
+      gold: state.gold + result.goldGained + bagOverflowGold,
+      gems: state.gems + result.gemsGained,
+      statPoints: state.statPoints + addedStatPoints,
+      skillPoints: state.skillPoints + addedSkillPoints,
+      raidStamina: min(20, state.raidStamina + result.staminaRegenerated),
+      inventory: newInv,
+      craftingMaterials: updatedMaterials,
+      petFoods: updatedPetFoods,
+      heroLevelProgress: updatedHeroProgress,
+      lastActiveTimestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+    _save();
   }
 
   /// Selects zone and stage to challenge

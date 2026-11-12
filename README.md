@@ -1,4 +1,4 @@
-# Tactical Idle RPG (Game AND) - Android Offline RPG
+# Vô Ảnh Chiến Ký - Tactical Idle RPG (Android Offline RPG)
 
 Game nhập vai chiến thuật một nhân vật (**Single Character RPG + Idle Auto Battle + Character Builder**) viết bằng **Flutter + Dart**, hoạt động 100% offline, không cần internet hay server.
 
@@ -265,6 +265,77 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
 - **Phần thưởng Diệt Boss**: Nhận 1 Thần Binh Huyền Thoại (Legendary Weapon) + 100 💎 + Danh hiệu độc quyền theo Boss (*Kẻ Diệt Rồng, Kẻ Trảm Ma, Kẻ Nghịch Thần*).
 - **Bảng Xếp Hạng Sát Thương**: Top 10 tổng kết tuần, vị trí Top 1 nhận danh hiệu *"Sát Thần"* và 5,000 Vàng.
 
+### 2.19. Hệ Thống Tiến Trình Ngoại Tuyến (Offline Progress & Auto-Farm)
+- **Cơ chế theo dõi**: Tự động lưu `lastActiveTimestamp` qua `WidgetsBindingObserver` mỗi khi thoát hoặc tạm dừng ứng dụng. Khi mở lại, tính toán chính xác số giây vắng mặt (`offlineSeconds = now - lastActive`).
+- **Kênh tăng trưởng offline**:
+  - **Hồi Thể Lực Raid**: Hồi 1 điểm thể lực sau mỗi 5 phút ngoại tuyến (tối đa 20/20 điểm).
+  - **Auto-Farm Ải Đã Phá**: Khi người chơi bật cờ `isAutoFarming` trên ải đã chinh phục, hệ thống tính toán mô phỏng 1 trận thắng sau mỗi 25 giây (thời lượng trung bình).
+  - **Tỉ lệ cân bằng**: Thưởng 60% EXP, Vàng, Đá Quý, Nguyên Liệu và Thức Ăn Thú Cưng so với cày trực tuyến nhằm kiểm soát lạm phát tài nguyên.
+  - **Giới hạn an toàn (Anti-Inflation Caps)**: Giới hạn tối đa **8 giờ** tích lũy ngoại tuyến (28,800 giây) và tối đa **200 trận** auto-farm mỗi lần đăng nhập lại.
+- **Giao diện nhận thưởng**:
+  - Bật/tắt ải auto-farm linh hoạt trực tiếp trong màn hình `MapScreen`.
+  - Banner trạng thái `"🔄 Đang farm: Ải X-Y"` hiển thị tại `HomeScreen`.
+  - Hộp thoại vinh danh `"🌙 TRONG LÚC BẠN VẮNG MẶT..."` với thống kê chi tiết thời gian vắng mặt, số trận thắng, tài nguyên thu về cùng nút ấn bắt buộc `"NHẬN TẤT CẢ PHẦN THƯỞNG"`. Không hiển thị nếu vắng mặt dưới 1 phút.
+
+### 2.20. Báo Cáo Cân Bằng Độ Khó Endgame (Final Balance Report)
+- Tự động xuất file báo cáo chi tiết **`BALANCE_REPORT.md`** tại thư mục gốc dự án.
+- Phân tích và kiểm chứng toàn diện đường cong độ khó và các cơ chế khắc chế chiến thuật qua 4 mốc cấp độ dũng sĩ:
+  - **Mốc 1 (Level 10)**: Build trung bình (Vũ khí + Giáp + Phụ kiện Uncommon + Khiên Lửa) vượt qua Boss Vùng 2 (Ifrit).
+  - **Mốc 2 (Level 20)**: Trang bị Rare +3 kết hợp Hồi Máu & Giáp Chống Phản Đòn đánh bại Boss Vùng 4 (Minh Vương Hades).
+  - **Mốc 3 (Level 30)**: Trang bị Epic +4 khắc chế thành công cơ chế Hồi Máu của Boss Vùng 5 (Diablo) và chinh phục Tháp Vô Tận Tầng 10.
+  - **Mốc 4 (Level 40)**: Sau Prestige 1, kết hợp Linh Thú, Set Trang Bị Huyền Thoại +5 khảm 9 Ngọc và Dòng Tẩy Luyện Lifesteal vượt qua Tháp Vô Tận Tầng 20 và gây $>25\%$ HP ($\ge 125,000$ DMG) lên Đại Ma Vương Ragnarok trong 1 lượt đấu 60 giây.
+
+### 2.21. Bộ 6 Tính Năng Tối Ưu Trải Nghiệm (Final Quality of Life - QoL)
+1. **Trang Bị Tốt Nhất (Equip Best)**: Nút thao tác một chạm tại màn hình Build, tự động quét kho đồ và trang bị các món có điểm Lực Chiến (Combat Power) cao nhất cho cả 3 slot Vũ Khí, Giáp và Phụ Kiện.
+2. **Bộ Lọc & Sắp Xếp Kho Đồ (Filter & Sort)**:
+   - Lọc theo bậc hiếm: *Tất Cả, Common, Uncommon, Rare, Epic, Legendary*.
+   - Sắp xếp linh hoạt theo: *Mới nhất, Chỉ số chính (ATK/DEF/HP), Bậc hiếm*.
+3. **Hệ Thống Chấm Đỏ Thông Báo (Notification Badges)**:
+   - Hiển thị chấm đỏ nổi bật khi còn điểm chỉ số (`statPoints > 0`) hoặc điểm kỹ năng (`skillPoints > 0`).
+   - Chấm đỏ trên tab Trang bị khi có đồ trong kho.
+   - Chấm đỏ trên icon Đấu Trường khi có mốc thưởng Vé Mùa Season Pass chưa nhận (`hasUnclaimedSeasonMilestones`).
+4. **Hộp Thoại Xác Nhận Tiêu Phí Kim Cương (Confirm Spending 💎)**:
+   - Hộp thoại xác nhận an toàn trước khi tiêu tốn Kim Cương: Mua vé khiêu chiến Raid (1 💎), Tẩy Cây Ngộ Đạo (5 💎), Khóa dòng phụ khi Reforge (1 💎).
+5. **Chỉ Báo Tự Động Lưu (Auto-Save Indicator)**:
+   - Huy hiệu góc trên `"💾 Đã lưu"` với hiệu ứng mờ dần (Fade animation) kích hoạt mượt mà sau mỗi lần lưu dữ liệu hoặc định kỳ 30 giây.
+6. **Nút Chia Sẻ Thành Tích Trận Đấu (Share Victory)**:
+   - Nút `"📋 CHIA SẺ THÀNH TÍCH"` tại màn hình chiến thắng, tự động sao chép văn bản vinh danh vào Clipboard kèm thông báo Toast tiện lợi.
+
+### 2.22. Hệ Thống Trau Chuốt Trải Nghiệm (Game Polish & Visual Juice)
+1. **Visual Juice & Combat Feedback**:
+   - **Rung màn hình (Screen Shake)**: Kích hoạt mượt mà qua `Transform.translate` khi Chí Mạng (4px/0.15s), Boss gục ngã (10px/0.4s), hoặc dũng sĩ nhận đòn mất $>20\%$ Max HP (6px/0.2s).
+   - **Chớp đòn đánh (Hit Flash)**: Avatar quái vật chớp trắng 0.1s alpha 50% mỗi khi trúng đòn sát thương.
+   - **Hiệu ứng số sát thương (Damage Numbers Animation)**:
+     - *Sát thương thường*: Nảy scale 0.8 → 1.2 → 1.0 (trong 0.3s) + bay lên 40px + mờ dần.
+     - *Chí mạng (Crit)*: Scale phóng đại 1.5×, màu vàng hổ phách rực rỡ, viền đen dày dặn 4.5px, rung nhẹ và thêm tiền tố `"⭐ "`.
+     - *Né đòn (Miss/Dodge)*: Hiển thị chữ `"NÉ!"` màu xám nghiêng (italic), không scale nảy.
+   - **Biểu ngữ thi triển kỹ năng (Skill Banner)**: Biểu ngữ chéo 30° lướt ngang màn hình từ trái sang phải trong 0.6s với vệt sáng ánh kim/hỏa diệm kèm hiệu ứng đóng băng tạm thời 0.1s (Hitstop impact).
+   - **Cảnh báo Máu Thấp (Low HP Feedback)**:
+     - Khi HP $<30\%$: Viền màn hình ánh đỏ nhịp đập liên tục (pulse 1s loop).
+     - Khi HP $<15\%$: Kích hoạt thêm viền tối ma thuật (dark vignette) che mờ 4 góc màn hình.
+   - **Chuyển cảnh & Dialog (UI Transitions)**: Toàn bộ điều hướng ứng dụng trang bị `SlideTransition` kết hợp `FadeTransition` lướt êm ái từ phải sang. Toàn bộ popup dùng `AppTheme.showScaleDialog` phóng to mượt mà 0.9 → 1.0 + fade 0.2s.
+   - **Hiệu ứng hạt ma thuật (CustomPainter Particle Effects)**:
+     - *Quái vật tan biến (`MonsterDeathParticles`)*: Văng 8–12 mảnh vụn ánh sáng năng lượng khi bị tiêu diệt.
+     - *Thăng cấp vinh quang (`LevelUpParticles`)*: 20 đốm sáng vàng kim bay vút lên trời cùng các tia sáng xoay quanh dũng sĩ.
+     - *Ánh kim trang bị quý (`RareLootGleamOverlay`)*: Ngôi sao 4 cánh lấp lánh quét nhẹ qua các thẻ đồ bậc Rare trở lên.
+     - *Nút Chiến Đấu tóe lửa (`ButtonFireSparks`)*: Bắn ra 5 đốm tàn lửa rực rỡ mỗi khi người chơi chạm vào nút bắt đầu trận đánh.
+     - *Bộ nạp khung xương (`SkeletonLoader`)*: Dải sáng shimmering hiện đại cho danh sách đang tải.
+2. **Âm Thanh Hệ Thống & Rung Phản Hồi (Audio & Haptics)**:
+   - Quản lý tập trung qua `SoundService`: Tận dụng âm thanh tích hợp hệ điều hành `SystemSoundType.click` và `SystemSoundType.alert` (do dự án không có file audio asset cục bộ).
+   - Đa tầng rung phản hồi: `lightImpact` (chạm nút/nhặt đồ), `mediumImpact` (chí mạng/thăng cấp/hạ boss), `heavyImpact` (thất bại/boss cuồng nộ), `selectionClick` (chọn trang bị/skill).
+   - Hộp thoại Cài Đặt (icon ⚙️ tại màn hình chính) cho phép bật/tắt độc lập `"Hiệu ứng Âm Thanh"` và `"Phản hồi Rung"`.
+3. **Màn Hình Tải & Trạng Thái Trống (Loading & Empty States)**:
+   - Đếm ngược bắt đầu trận đánh (0.5s `"⚔️ Chuẩn bị chiến đấu..."`).
+   - Kho đồ trống: Biểu tượng ba lô to mờ cùng thông điệp `"🎒 Kho đồ trống — Đánh quái để nhặt trang bị!"` và nút shortcut `"⚔️ Đi đánh quái"`.
+   - Đấu Trường bị khóa: Biểu tượng ổ khóa lớn `"🔒 Đạt Lv.10 để mở Đấu Trường"`.
+   - Bảng xếp hạng trống: `"🏆 Chưa có ai trên bảng — Bạn là người đầu tiên!"`.
+   - Vé mùa chưa kích hoạt: `"🎫 Mùa mới bắt đầu khi bạn tham gia Đấu Trường lần đầu"`.
+4. **Hệ Thống Hướng Dẫn & Gợi Ý Thông Minh (Onboarding Refinement)**:
+   - **Bỏ qua hướng dẫn (Skip Tutorials)**: Nút `"Bỏ qua tất cả"` xuất hiện tại tất cả hộp thoại tân thủ; tự động vô hiệu hóa vĩnh viễn hướng dẫn nếu phát hiện người chơi đã có tiến trình hoặc cấp độ $>1$.
+   - **Gợi ý chiến thuật thông minh (Smart Hint)**: Tự động hiện popup hướng dẫn ép ngọc DEF/HP, nâng điểm Thể Lực và trang bị khiên thủ khi người chơi thua 3 trận liên tiếp tại cùng một ải.
+   - **Nút cộng điểm nhấp nháy**: Nút `"+"` của các thuộc tính tự động thở nhịp nhàng (pulsing scale 1.14×) khi dũng sĩ còn điểm chỉ số chưa cộng.
+   - **Huy hiệu trang bị nhấp nháy**: Chấm đỏ trang bị nhắc nhở khi có trang bị mới chưa mặc trong kho quá 1 phút.
+
 ---
 
 ## 3. Hướng Dẫn Chạy & Kiểm Thử
@@ -273,11 +344,11 @@ Thêm 4 bộ trang bị hoàng kim (3 món: Vũ khí + Giáp + Phụ kiện), ma
 ```bash
 flutter test
 ```
-Tất cả 26/26 tests được đảm bảo 100% Pass:
+Tất cả 36/36 tests được đảm bảo 100% Pass:
 - Baseline Vùng 1 quái thường làm mất $\ge 40\%$ HP nếu build sai.
 - Boss Vùng 1 đánh bại người chơi chưa nâng cấp.
 - Pure INT thất bại ở Vùng 3 do Kháng Phép 40%.
-- Pure STR thất bại ở Boss Diablo Vùng 5 do Hồi Máu 5%/s.
+- Pure STR thất bại ở Boss Diablo Vùng 5 do Hồi Máu.
 - Pure VIT Tanker vượt qua Boss Vùng 4 Hades.
 - Endless Tower scaling & loot rules.
 - Hệ thống Quests, Achievements & Respec.
@@ -295,6 +366,49 @@ Tất cả 26/26 tests được đảm bảo 100% Pass:
 - Tính toán chỉ số nội tại thú cưng Companion và giới hạn trần nghiêm ngặt $+30\%$.
 - Cơ chế trừ máu Boss Raid và bảo toàn sát thương cộng dồn qua nhiều trận đánh.
 - Cơ chế hồi thể lực Raid ngoại tuyến (5 phút/1 thể lực) và giới hạn mua thể lực tối đa 3 lần/ngày.
+- Hệ thống Ngoại Tuyến (Offline Progress 1 giờ auto-farm thưởng 60% tài nguyên).
+- Giới hạn trần ngoại tuyến (Offline cap 8 giờ và tối đa 200 trận).
+- Cơ chế hồi thể lực ngoại tuyến khi không bật auto-farm.
+- QoL: Thuật toán tự động trang bị tốt nhất theo Lực Chiến (`equipBestGear`).
+- QoL: Kiểm tra phát hiện mốc thưởng Season Pass chưa nhận (`hasUnclaimedSeasonMilestones`).
+- Polish: Bật/tắt cài đặt âm thanh và rung phản hồi (`toggleSound`, `toggleHaptic`).
+- Polish: Ghi nhận số trận thua liên tiếp và điều kiện kích hoạt Smart Hint (`consecutiveDefeats`).
+- Polish: Bỏ qua toàn bộ hướng dẫn tân thủ vĩnh viễn (`skipAllTutorials`).
+- QA Sweep 1: Giới hạn túi đồ 200 ô, tự động quy đổi trang bị tràn thành Vàng (`maxInventoryCapacity`).
+- QA Sweep 2: Sao lưu và phục hồi dữ liệu hoàn chỉnh chuẩn JSON (`toJson` & `Player.fromJson`).
+- Xác thực 4 mốc cân bằng độ khó game trong `balance_report_test.dart`.
+
+---
+
+## 4. Hướng Dẫn Đóng Gói Bản Phát Hành (Release Build)
+
+### 4.1. Thông Tin Chữ Ký & Keystore
+- **Keystore**: `android/app/upload-keystore.jks`
+- **Key Alias**: `upload`
+- **Cấu hình Signing**: Khai báo an toàn trong `android/key.properties`
+- **Tối ưu hóa Code & Tài nguyên**: Bật `isMinifyEnabled = true`, `isShrinkResources = true`, áp dụng `proguard-rules.pro`.
+
+### 4.2. Build APK Release
+```bash
+# Tách file APK theo kiến trúc CPU (tối ưu dung lượng tải về thiết bị)
+flutter build apk --release --split-per-abi
+
+# Build file APK đa năng (Universal APK)
+flutter build apk --release
+```
+
+### 4.3. Thư Mục Xuất File APK
+Các file APK thành phẩm được đặt tại thư mục:
+`build/app/outputs/flutter-apk/`
+- `app-arm64-v8a-release.apk` (Dành cho điện thoại Android hiện đại 64-bit, ~75.3MB)
+- `app-armeabi-v7a-release.apk` (Dành cho điện thoại Android 32-bit cũ hơn, ~72.9MB)
+- `app-x86_64-release.apk` (Dành cho máy ảo hoặc giả lập Android trên PC, ~76.7MB)
+- `app-release.apk` (Bản cài đặt Universal dùng cho mọi thiết bị, ~109.2MB)
+
+### 4.4. Chạy Ứng Dụng Trên Thiết Bị Thật
+```bash
+flutter run --release
+```
 
 ### Chạy Ứng Dụng Trên Android Emulator hoặc Thiết Bị Thật
 ```bash

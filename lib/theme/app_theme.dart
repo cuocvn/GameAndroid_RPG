@@ -2,6 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/equipment.dart';
 
+class SlideFadePageTransitionsBuilder extends PageTransitionsBuilder {
+  const SlideFadePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final curvedAnimation = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+    );
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0.25, 0.0), // Slide từ phải
+        end: Offset.zero,
+      ).animate(curvedAnimation),
+      child: FadeTransition(
+        opacity: curvedAnimation,
+        child: child,
+      ),
+    );
+  }
+}
+
 class AppTheme {
   // --- Core Dark Fantasy Palette ---
   static const Color bgDark = Color(0xFF0D0B14); // Ultra-dark purple black
@@ -155,6 +183,15 @@ class AppTheme {
         background: bgDark,
         error: redAccent,
       ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: SlideFadePageTransitionsBuilder(),
+          TargetPlatform.iOS: SlideFadePageTransitionsBuilder(),
+          TargetPlatform.windows: SlideFadePageTransitionsBuilder(),
+          TargetPlatform.linux: SlideFadePageTransitionsBuilder(),
+          TargetPlatform.macOS: SlideFadePageTransitionsBuilder(),
+        },
+      ),
       textTheme: ThemeData.dark().textTheme.apply(
         fontFamily: GoogleFonts.inter().fontFamily,
       ),
@@ -179,6 +216,32 @@ class AppTheme {
           elevation: 4,
         ),
       ),
+    );
+  }
+
+  // --- Smooth Modal Dialog Transition (Scale 0.9 -> 1.0 + Fade in 0.2s) ---
+  static Future<T?> showScaleDialog<T>({
+    required BuildContext context,
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (ctx, anim1, anim2) => builder(ctx),
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOut);
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
     );
   }
 }

@@ -52,6 +52,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen>
   Widget build(BuildContext context) {
     final player = ref.watch(playerProvider);
     final rankInfo = ArenaRankInfo.fromAp(player.arenaPoints);
+    final isArenaUnlocked = player.level >= 10 || player.highestEndlessFloor >= 5;
 
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
@@ -68,28 +69,72 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen>
           ),
         ),
         centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppTheme.redAccent,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white54,
-          labelStyle: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: const [
-            Tab(icon: Icon(Icons.sports_kabaddi, size: 20), text: 'Đấu Trường'),
-            Tab(icon: Icon(Icons.emoji_events, size: 20), text: 'Xếp Hạng'),
-            Tab(icon: Icon(Icons.confirmation_number, size: 20), text: 'Vé Mùa'),
-          ],
-        ),
+        bottom: isArenaUnlocked
+            ? TabBar(
+                controller: _tabController,
+                indicatorColor: AppTheme.redAccent,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white54,
+                labelStyle: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 13),
+                tabs: const [
+                  Tab(icon: Icon(Icons.sports_kabaddi, size: 20), text: 'Đấu Trường'),
+                  Tab(icon: Icon(Icons.emoji_events, size: 20), text: 'Xếp Hạng'),
+                  Tab(icon: Icon(Icons.confirmation_number, size: 20), text: 'Vé Mùa'),
+                ],
+              )
+            : null,
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildArenaCombatTab(player, rankInfo),
-          _buildLeaderboardTab(player),
-          _buildSeasonPassTab(player),
-        ],
-      ),
+      body: !isArenaUnlocked
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24, width: 2),
+                      ),
+                      child: const Text('🔒', style: TextStyle(fontSize: 48)),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '🔒 Đạt Lv.10 để mở Đấu Trường',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cinzel(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.goldAccent,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Hãy rèn luyện thêm tại các ải quái vật hoặc vượt Tháp Vô Tận Tầng 5 để mở khóa tính năng khiêu chiến Đấu Trường.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
+                      child: const Text('Quay lại', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildArenaCombatTab(player, rankInfo),
+                _buildLeaderboardTab(player),
+                _buildSeasonPassTab(player),
+              ],
+            ),
     );
   }
 
@@ -636,6 +681,35 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen>
   // =========================================================================
   Widget _buildLeaderboardTab(Player player) {
     final entries = ref.read(playerProvider.notifier).getLeaderboardEntries();
+    if (entries.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('🏆', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 14),
+              Text(
+                '🏆 Chưa có ai trên bảng — Bạn là người đầu tiên!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.cinzel(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.goldAccent,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Hãy tham gia thi đấu trận đầu tiên để ghi danh vào bảng vàng!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final playerRankIndex = entries.indexWhere((e) => e.isPlayer);
     final isPlayerInTop10 = playerRankIndex >= 0 && playerRankIndex < 10;
 
@@ -863,6 +937,46 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen>
   Widget _buildSeasonPassTab(Player player) {
     final milestones = SeasonMilestone.generateMilestones();
     final cumulativeAp = player.cumulativeSeasonAp;
+
+    final isSeasonInactive = cumulativeAp == 0 && player.arenaMatchHistory.isEmpty;
+    if (isSeasonInactive) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('🎫', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 14),
+              Text(
+                '🎫 Mùa mới bắt đầu khi bạn tham gia Đấu Trường lần đầu',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.cinzel(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.purpleAccent,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Hãy tham gia khiêu chiến đối thủ ở tab Đấu Trường để kích hoạt vé mùa và mở khóa 30 mốc phần thưởng độc quyền!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _tabController.animateTo(0);
+                },
+                icon: const Icon(Icons.sports_kabaddi, color: Colors.black, size: 18),
+                label: const Text('Đấu Trận Đầu Tiên', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     // Calculate days passed in 30-day season
     final now = DateTime.now().millisecondsSinceEpoch;

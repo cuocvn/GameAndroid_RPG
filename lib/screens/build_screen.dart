@@ -14,8 +14,10 @@ import '../models/hero_story.dart';
 import '../models/player.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
+import '../services/sound_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/equipment_card.dart';
+import '../widgets/particle_effects.dart';
 import '../widgets/skill_card.dart';
 import '../widgets/socket_row_widget.dart';
 import '../widgets/stat_row.dart';
@@ -32,6 +34,8 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _inventoryFilterIndex = 0; // 0: All, 1: Weapon, 2: Armor, 3: Accessory
+  int _rarityFilterIndex = 0; // 0: Tất cả, 1: Common, 2: Uncommon, 3: Rare, 4: Epic, 5: Legendary
+  int _sortIndex = 0; // 0: Mới nhất, 1: Chỉ số chính, 2: Rarity
 
   @override
   void initState() {
@@ -213,6 +217,10 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                     children: [
                       if (!isEquipUnlocked) const Text('🔒 ', style: TextStyle(fontSize: 11)),
                       Text(isEquipUnlocked ? 'TRANG BỊ' : 'TRANG BỊ (Lv.5)'),
+                      if (isEquipUnlocked && player.inventory.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        _buildBadge('${player.inventory.length}', AppTheme.goldAccent),
+                      ],
                     ],
                   ),
                 ),
@@ -534,25 +542,106 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
   Widget _buildEquipmentTab(Player player) {
     final notifier = ref.read(playerProvider.notifier);
 
-    List<Equipment> filteredInventory = player.inventory;
+    List<Equipment> filteredInventory = List<Equipment>.from(player.inventory);
+    // 1. Slot Filter
     if (_inventoryFilterIndex == 1) {
-      filteredInventory = player.inventory.where((e) => e.slot == EquipmentSlot.weapon).toList();
+      filteredInventory = filteredInventory.where((e) => e.slot == EquipmentSlot.weapon).toList();
     } else if (_inventoryFilterIndex == 2) {
-      filteredInventory = player.inventory.where((e) => e.slot == EquipmentSlot.armor).toList();
+      filteredInventory = filteredInventory.where((e) => e.slot == EquipmentSlot.armor).toList();
     } else if (_inventoryFilterIndex == 3) {
-      filteredInventory = player.inventory.where((e) => e.slot == EquipmentSlot.accessory).toList();
+      filteredInventory = filteredInventory.where((e) => e.slot == EquipmentSlot.accessory).toList();
+    }
+
+    // 2. Rarity Filter
+    if (_rarityFilterIndex == 1) {
+      filteredInventory = filteredInventory.where((e) => e.rarity == EquipmentRarity.common).toList();
+    } else if (_rarityFilterIndex == 2) {
+      filteredInventory = filteredInventory.where((e) => e.rarity == EquipmentRarity.uncommon).toList();
+    } else if (_rarityFilterIndex == 3) {
+      filteredInventory = filteredInventory.where((e) => e.rarity == EquipmentRarity.rare).toList();
+    } else if (_rarityFilterIndex == 4) {
+      filteredInventory = filteredInventory.where((e) => e.rarity == EquipmentRarity.epic).toList();
+    } else if (_rarityFilterIndex == 5) {
+      filteredInventory = filteredInventory.where((e) => e.rarity == EquipmentRarity.legendary).toList();
+    }
+
+    // 3. Sort
+    if (_sortIndex == 1) {
+      filteredInventory.sort((a, b) {
+        final aScore = (a.effectiveFlatAtk * 2) + (a.effectiveFlatDef * 2) + (a.effectiveFlatHp * 0.2);
+        final bScore = (b.effectiveFlatAtk * 2) + (b.effectiveFlatDef * 2) + (b.effectiveFlatHp * 0.2);
+        return bScore.compareTo(aScore);
+      });
+    } else if (_sortIndex == 2) {
+      filteredInventory.sort((a, b) {
+        final rComp = b.rarity.index.compareTo(a.rarity.index);
+        if (rComp != 0) return rComp;
+        return b.upgradeLevel.compareTo(a.upgradeLevel);
+      });
     }
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          'TRANG BỊ ĐANG MẶC (3 Ô)',
-          style: GoogleFonts.cinzel(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.goldAccent,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'TRANG BỊ ĐANG MẶC (3 Ô)',
+              style: GoogleFonts.cinzel(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.goldAccent,
+              ),
+            ),
+            // Nút "Trang bị tốt nhất"
+            InkWell(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                final changed = notifier.equipBestGear();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: AppTheme.bgSurface,
+                    content: Text(
+                      changed
+                          ? '⚡ Đã tự động trang bị các món đồ tối ưu nhất theo Lực Chiến!'
+                          : 'Hiện tại bạn đã đang mang những trang bị tốt nhất trong kho!',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  gradient: AppTheme.goldButtonGradient,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.goldAccent.withOpacity(0.35),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.auto_awesome, size: 13, color: Colors.black),
+                    SizedBox(width: 4),
+                    Text(
+                      'Trang Bị Tốt Nhất',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
 
@@ -604,13 +693,23 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'KHO ĐỒ (${player.inventory.length} MÓN)',
-              style: GoogleFonts.cinzel(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.goldAccent,
-              ),
+            Row(
+              children: [
+                Text(
+                  'KHO ĐỒ (${player.inventory.length}/${Player.maxInventoryCapacity})',
+                  style: GoogleFonts.cinzel(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: player.inventory.length >= Player.maxInventoryCapacity
+                        ? Colors.redAccent
+                        : (player.inventory.length >= 170 ? Colors.orangeAccent : AppTheme.goldAccent),
+                  ),
+                ),
+                if (player.inventory.length >= 180) ...[
+                  const SizedBox(width: 4),
+                  const Text('⚠️', style: TextStyle(fontSize: 12)),
+                ],
+              ],
             ),
             Row(
               children: [
@@ -674,15 +773,64 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
         ),
         const SizedBox(height: 8),
 
-        // Inventory Filter Chips
+        // Slot Filter & Sort
+        Row(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _filterChip('Tất cả', 0),
+                    _filterChip('Vũ khí ⚔️', 1),
+                    _filterChip('Giáp 🛡️', 2),
+                    _filterChip('Phụ kiện 💍', 3),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Sort Dropdown
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppTheme.bgSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _sortIndex,
+                  dropdownColor: AppTheme.bgSurface,
+                  icon: const Icon(Icons.sort, size: 14, color: AppTheme.goldAccent),
+                  style: const TextStyle(fontSize: 11, color: Colors.white),
+                  items: const [
+                    DropdownMenuItem(value: 0, child: Text('Mới nhất')),
+                    DropdownMenuItem(value: 1, child: Text('Chỉ số chính')),
+                    DropdownMenuItem(value: 2, child: Text('Bậc hiếm')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => _sortIndex = val);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        // Rarity Filter Bar
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _filterChip('Tất cả (${player.inventory.length})', 0),
-              _filterChip('Vũ khí ⚔️', 1),
-              _filterChip('Giáp 🛡️', 2),
-              _filterChip('Phụ kiện 💍', 3),
+              _rarityFilterChip('Tất cả bậc', 0),
+              _rarityFilterChip('Common', 1, color: AppTheme.getRarityColor(EquipmentRarity.common)),
+              _rarityFilterChip('Uncommon', 2, color: AppTheme.getRarityColor(EquipmentRarity.uncommon)),
+              _rarityFilterChip('Rare', 3, color: AppTheme.getRarityColor(EquipmentRarity.rare)),
+              _rarityFilterChip('Epic', 4, color: AppTheme.getRarityColor(EquipmentRarity.epic)),
+              _rarityFilterChip('Legendary', 5, color: AppTheme.getRarityColor(EquipmentRarity.legendary)),
             ],
           ),
         ),
@@ -690,21 +838,55 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
 
         if (filteredInventory.isEmpty)
           Container(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: AppTheme.surfaceGradient,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white12),
             ),
-            child: Text(
-              'Không có trang bị nào trong mục này.\nHãy vào Cửa Hàng hoặc chiến đấu càn quét quái để thu thập thêm!',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: Colors.white60, fontSize: 12, height: 1.4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Opacity(
+                  opacity: 0.35,
+                  child: const Text('🎒', style: TextStyle(fontSize: 52)),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '🎒 Kho đồ trống — Đánh quái để nhặt trang bị!',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cinzel(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.goldAccent,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Chiến đấu tại các ải bản đồ hoặc khiêu chiến Tháp Vô Tận để thu thập trang bị quý hiếm.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(fontSize: 12, color: Colors.white60),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    SoundService.playClick();
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.sports_martial_arts, color: Colors.black, size: 18),
+                  label: const Text('⚔️ Đi đánh quái', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.goldAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
             ),
           )
         else
           ...filteredInventory.map((item) {
-            return EquipmentCard(
+            final card = EquipmentCard(
               item: item,
               isEquipped: false,
               onEquip: () => notifier.equipItem(item),
@@ -715,6 +897,11 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                   : null,
               onTapSocket: (socketIdx, gem) => _handleSocketTap(item, socketIdx, gem, player),
             );
+
+            if (item.rarity.index >= EquipmentRarity.rare.index) {
+              return RareLootGleamOverlay(child: card);
+            }
+            return card;
           }),
         const SizedBox(height: 24),
       ],
@@ -1344,11 +1531,57 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
                   ElevatedButton.icon(
                     onPressed: canRoll
                         ? () {
-                            HapticFeedback.mediumImpact();
-                            final rolled = notifier.rollReforgeCandidate(item: item, affixIndex: selectedAffixIdx);
-                            setModalState(() {
-                              candidate = rolled;
-                            });
+                            if (lockOther) {
+                              showDialog(
+                                context: context,
+                                builder: (dialogCtx) => AlertDialog(
+                                  backgroundColor: AppTheme.bgSurface,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+                                  ),
+                                  title: Text(
+                                    'XÁC NHẬN TIÊU PHÍ',
+                                    style: GoogleFonts.cinzel(
+                                      color: AppTheme.goldAccent,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  content: const Text(
+                                    'Xác nhận tốn 1 💎 để khóa chỉ số phụ khi Reforge?',
+                                    style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dialogCtx),
+                                      child: const Text('Hủy', style: TextStyle(color: Colors.white60)),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.goldAccent,
+                                        foregroundColor: Colors.black,
+                                      ),
+                                      onPressed: () {
+                                        Navigator.pop(dialogCtx);
+                                        HapticFeedback.mediumImpact();
+                                        final rolled = notifier.rollReforgeCandidate(item: item, affixIndex: selectedAffixIdx);
+                                        setModalState(() {
+                                          candidate = rolled;
+                                        });
+                                      },
+                                      child: const Text('Xác nhận (1 💎)', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              HapticFeedback.mediumImpact();
+                              final rolled = notifier.rollReforgeCandidate(item: item, affixIndex: selectedAffixIdx);
+                              setModalState(() {
+                                candidate = rolled;
+                              });
+                            }
                           }
                         : null,
                     icon: const Icon(Icons.casino, size: 14),
@@ -1414,6 +1647,34 @@ class _BuildScreenState extends ConsumerState<BuildScreen>
         backgroundColor: AppTheme.bgSurface,
         onSelected: (val) {
           if (val) setState(() => _inventoryFilterIndex = index);
+        },
+      ),
+    );
+  }
+
+  Widget _rarityFilterChip(String label, int index, {Color? color}) {
+    final isSelected = _rarityFilterIndex == index;
+    final chipColor = color ?? AppTheme.goldAccent;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.black : (color ?? Colors.white70),
+          ),
+        ),
+        selected: isSelected,
+        selectedColor: chipColor,
+        backgroundColor: AppTheme.bgSurface,
+        side: BorderSide(
+          color: isSelected ? chipColor : chipColor.withOpacity(0.35),
+          width: 1,
+        ),
+        onSelected: (val) {
+          if (val) setState(() => _rarityFilterIndex = index);
         },
       ),
     );

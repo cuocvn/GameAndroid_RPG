@@ -369,10 +369,72 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             ),
                           ),
 
-                          // Cleared Status Icon
-                          if (isCleared)
+                          // Cleared Status Icon & Auto-Farm Button
+                          if (isCleared) ...[
+                            InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                ref.read(playerProvider.notifier).toggleAutoFarm(_selectedZoneId, stageNum);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: (player.isAutoFarming &&
+                                          player.autoFarmZone == _selectedZoneId &&
+                                          player.autoFarmStage == stageNum)
+                                      ? const Color(0xFF5A3A0B)
+                                      : (isSelected ? Colors.black26 : Colors.white10),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: (player.isAutoFarming &&
+                                            player.autoFarmZone == _selectedZoneId &&
+                                            player.autoFarmStage == stageNum)
+                                        ? AppTheme.goldAccent
+                                        : Colors.white24,
+                                    width: (player.isAutoFarming &&
+                                            player.autoFarmZone == _selectedZoneId &&
+                                            player.autoFarmStage == stageNum)
+                                        ? 1.5
+                                        : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.autorenew,
+                                      size: 13,
+                                      color: (player.isAutoFarming &&
+                                              player.autoFarmZone == _selectedZoneId &&
+                                              player.autoFarmStage == stageNum)
+                                          ? AppTheme.goldAccent
+                                          : (isSelected ? Colors.black : Colors.white70),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      (player.isAutoFarming &&
+                                              player.autoFarmZone == _selectedZoneId &&
+                                              player.autoFarmStage == stageNum)
+                                          ? 'Đang Farm'
+                                          : 'Auto-Farm',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: (player.isAutoFarming &&
+                                                player.autoFarmZone == _selectedZoneId &&
+                                                player.autoFarmStage == stageNum)
+                                            ? AppTheme.goldAccent
+                                            : (isSelected ? Colors.black : Colors.white70),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                               decoration: BoxDecoration(
                                 color: isSelected ? Colors.black26 : AppTheme.greenAccent.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(10),
@@ -386,6 +448,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 ),
                               ),
                             ),
+                          ],
                         ],
                       ),
                     ),

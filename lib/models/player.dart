@@ -3,6 +3,7 @@ import '../data/asset_mapping.dart';
 import 'arena_match_record.dart';
 import 'companion.dart';
 import 'equipment.dart';
+import 'season_pass.dart';
 import 'stats.dart';
 
 class Player {
@@ -96,6 +97,18 @@ class Player {
   final int dailyStaminaPurchases;
   final String lastStaminaPurchaseDate;
 
+  // Offline Progress & Auto-Farm System
+  final int lastActiveTimestamp;
+  final bool isAutoFarming;
+  final int autoFarmZone;
+  final int autoFarmStage;
+
+  // Sound, Haptics & Hint Settings
+  final bool isSoundEnabled;
+  final bool isHapticEnabled;
+  final Map<String, int> consecutiveDefeats;
+  final int lastInventoryAcquiredTime;
+
   const Player({
     this.name = 'Cyra',
     this.title = 'Hỏa Thuật Sư',
@@ -173,6 +186,14 @@ class Player {
     this.hasClaimedWeeklyRaidReward = false,
     this.dailyStaminaPurchases = 0,
     this.lastStaminaPurchaseDate = '',
+    this.lastActiveTimestamp = 0,
+    this.isAutoFarming = false,
+    this.autoFarmZone = 1,
+    this.autoFarmStage = 1,
+    this.isSoundEnabled = true,
+    this.isHapticEnabled = true,
+    this.consecutiveDefeats = const {},
+    this.lastInventoryAcquiredTime = 0,
   });
 
   /// Required EXP to level up
@@ -373,6 +394,12 @@ class Player {
     return min(6, slots);
   }
 
+  /// Maximum inventory capacity (QA Sweep standard)
+  static const int maxInventoryCapacity = 200;
+
+  /// Check if the inventory is at or above capacity
+  bool get isInventoryFull => inventory.length >= maxInventoryCapacity;
+
   /// Total combat power rating
   int get combatPower =>
       (maxHp ~/ 5) + ((physicalAtk + magicAtk) * 1.8).round() + (physicalDef * 3).round();
@@ -435,6 +462,12 @@ class Player {
       if (!claimed.contains(3)) return false;
     }
     return true;
+  }
+
+  /// QoL: Check if there are unclaimed Season milestones available
+  bool get hasUnclaimedSeasonMilestones {
+    final milestones = SeasonMilestone.generateMilestones();
+    return milestones.any((m) => cumulativeSeasonAp >= m.requiredAp && !claimedSeasonMilestones.contains(m.level));
   }
 
   /// Stat multiplier from story progress (+1% current hero, +5% if historian)
@@ -536,6 +569,14 @@ class Player {
     bool? hasClaimedWeeklyRaidReward,
     int? dailyStaminaPurchases,
     String? lastStaminaPurchaseDate,
+    int? lastActiveTimestamp,
+    bool? isAutoFarming,
+    int? autoFarmZone,
+    int? autoFarmStage,
+    bool? isSoundEnabled,
+    bool? isHapticEnabled,
+    Map<String, int>? consecutiveDefeats,
+    int? lastInventoryAcquiredTime,
   }) {
     return Player(
       name: name ?? this.name,
@@ -598,6 +639,14 @@ class Player {
       hasClaimedWeeklyRaidReward: hasClaimedWeeklyRaidReward ?? this.hasClaimedWeeklyRaidReward,
       dailyStaminaPurchases: dailyStaminaPurchases ?? this.dailyStaminaPurchases,
       lastStaminaPurchaseDate: lastStaminaPurchaseDate ?? this.lastStaminaPurchaseDate,
+      lastActiveTimestamp: lastActiveTimestamp ?? this.lastActiveTimestamp,
+      isAutoFarming: isAutoFarming ?? this.isAutoFarming,
+      autoFarmZone: autoFarmZone ?? this.autoFarmZone,
+      autoFarmStage: autoFarmStage ?? this.autoFarmStage,
+      isSoundEnabled: isSoundEnabled ?? this.isSoundEnabled,
+      isHapticEnabled: isHapticEnabled ?? this.isHapticEnabled,
+      consecutiveDefeats: consecutiveDefeats ?? this.consecutiveDefeats,
+      lastInventoryAcquiredTime: lastInventoryAcquiredTime ?? this.lastInventoryAcquiredTime,
     );
   }
 
@@ -661,6 +710,14 @@ class Player {
         'hasClaimedWeeklyRaidReward': hasClaimedWeeklyRaidReward,
         'dailyStaminaPurchases': dailyStaminaPurchases,
         'lastStaminaPurchaseDate': lastStaminaPurchaseDate,
+        'lastActiveTimestamp': lastActiveTimestamp,
+        'isAutoFarming': isAutoFarming,
+        'autoFarmZone': autoFarmZone,
+        'autoFarmStage': autoFarmStage,
+        'isSoundEnabled': isSoundEnabled,
+        'isHapticEnabled': isHapticEnabled,
+        'consecutiveDefeats': consecutiveDefeats,
+        'lastInventoryAcquiredTime': lastInventoryAcquiredTime,
       };
 
   factory Player.fromJson(Map<String, dynamic> json) => Player(
@@ -791,5 +848,15 @@ class Player {
         hasClaimedWeeklyRaidReward: json['hasClaimedWeeklyRaidReward'] as bool? ?? false,
         dailyStaminaPurchases: json['dailyStaminaPurchases'] as int? ?? 0,
         lastStaminaPurchaseDate: json['lastStaminaPurchaseDate'] as String? ?? '',
+        lastActiveTimestamp: json['lastActiveTimestamp'] as int? ?? 0,
+        isAutoFarming: json['isAutoFarming'] as bool? ?? false,
+        autoFarmZone: json['autoFarmZone'] as int? ?? 1,
+        autoFarmStage: json['autoFarmStage'] as int? ?? 1,
+        isSoundEnabled: json['isSoundEnabled'] as bool? ?? true,
+        isHapticEnabled: json['isHapticEnabled'] as bool? ?? true,
+        consecutiveDefeats: (json['consecutiveDefeats'] as Map<dynamic, dynamic>?)
+                ?.map((k, v) => MapEntry(k.toString(), v as int)) ??
+            const {},
+        lastInventoryAcquiredTime: json['lastInventoryAcquiredTime'] as int? ?? 0,
       );
 }

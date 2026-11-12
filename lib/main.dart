@@ -2,14 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/game_providers.dart';
-import 'screens/home_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/save_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set system UI style (dark immersive)
+  // 1. Lock portrait orientation
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // 2. Set dark immersive system UI style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -19,7 +25,7 @@ void main() async {
     ),
   );
 
-  // Initialize offline persistence (Hive & SharedPreferences)
+  // 3. Initialize offline persistence (Hive & SharedPreferences)
   await SaveService.init();
   final savedPlayer = await SaveService.loadPlayer();
 
@@ -28,21 +34,21 @@ void main() async {
       overrides: [
         playerProvider.overrideWith(() => PlayerNotifier(savedPlayer)),
       ],
-      child: const TacticalRpgApp(),
+      child: const VoAnhChienKyApp(),
     ),
   );
 }
 
-class TacticalRpgApp extends StatelessWidget {
-  const TacticalRpgApp({super.key});
+class VoAnhChienKyApp extends StatelessWidget {
+  const VoAnhChienKyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tactical Idle RPG',
+      title: 'Vô Ảnh Chiến Ký',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.themeData,
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }

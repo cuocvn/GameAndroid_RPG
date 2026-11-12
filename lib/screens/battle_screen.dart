@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,9 +19,11 @@ import '../models/raid_boss.dart';
 import '../models/skill.dart';
 import '../providers/game_providers.dart';
 import '../services/battle_service.dart';
+import '../services/sound_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/damage_text_widget.dart';
 import '../widgets/hp_bar.dart';
+import '../widgets/particle_effects.dart';
 
 class BattleScreen extends ConsumerStatefulWidget {
   final int zoneId;
@@ -47,7 +50,7 @@ class BattleScreen extends ConsumerStatefulWidget {
 }
 
 class _BattleScreenState extends ConsumerState<BattleScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late BattleService _battleService;
   BattleState? _currentState;
   late Enemy _enemy;
@@ -60,8 +63,29 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   late int _currentZoneId;
   late int _currentStage;
 
+  // Animation Controllers
   late AnimationController _breathingController;
   late Animation<double> _breathingAnimation;
+
+  late AnimationController _shakeController;
+  double _shakeIntensity = 0.0;
+  Offset _shakeOffset = Offset.zero;
+
+  late AnimationController _lowHpController;
+  late AnimationController _skillBannerController;
+
+  // Hit flash state
+  bool _isMonsterHitFlashing = false;
+  Timer? _monsterHitFlashTimer;
+
+  // Preparation Countdown (0.5s)
+  bool _isPreparingBattle = true;
+  Timer? _prepTimer;
+
+  // Tracking previous state for combat events
+  int? _previousEnemyHp;
+  int? _previousHeroHp;
+  String? _previousSkillCast;
 
   @override
   void initState() {
@@ -77,12 +101,61 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
       CurvedAnimation(parent: _breathingController, curve: Curves.easeInOut),
     );
 
+    // Screen Shake Controller
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..addListener(() {
+        if (!mounted) return;
+        final progress = _shakeController.value;
+        if (_shakeController.isAnimating) {
+          final decay = 1.0 - progress;
+          final dx = math.sin(progress * math.pi * 10) * _shakeIntensity * decay;
+          final dy = math.cos(progress * math.pi * 8) * _shakeIntensity * 0.5 * decay;
+          setState(() => _shakeOffset = Offset(dx, dy));
+        } else {
+          setState(() => _shakeOffset = Offset.zero);
+        }
+      });
+
+    // Low HP Pulse Controller
+    _lowHpController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+
+    // Skill Banner Slide Controller (0.6s)
+    _skillBannerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
     _startBattle();
+  }
+
+  void _triggerShake(double intensity, Duration duration) {
+    if (!mounted) return;
+    _shakeIntensity = intensity;
+    _shakeController.duration = duration;
+    _shakeController.forward(from: 0.0);
+  }
+
+  void _triggerMonsterHitFlash() {
+    _monsterHitFlashTimer?.cancel();
+    if (mounted) setState(() => _isMonsterHitFlashing = true);
+    _monsterHitFlashTimer = Timer(const Duration(milliseconds: 100), () {
+      if (mounted) setState(() => _isMonsterHitFlashing = false);
+    });
   }
 
   void _startBattle() {
     _dialogShown = false;
     _milestoneResult = null;
+    _isPreparingBattle = true;
+    _previousEnemyHp = null;
+    _previousHeroHp = null;
+    _previousSkillCast = null;
+
     final player = ref.read(playerProvider);
     if (widget.isRaid && widget.raidBoss != null) {
       _enemy = widget.raidBoss!.toEnemy(currentHp: player.raidBossCurrentHp);
@@ -99,11 +172,60 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
       enemy: _enemy,
       maxDuration: widget.isRaid ? 60.0 : null,
       onStateChanged: (state) {
-        if (mounted) {
-          setState(() {
-            _currentState = state;
+        if (!mounted) return;
+
+        final currPlayer = ref.read(playerProvider);
+        final nowSec = DateTime.now().millisecondsSinceEpoch / 1000;
+
+        // 1. Monster hit flash
+        if (_previousEnemyHp != null && state.enemy.currentHp < _previousEnemyHp!) {
+          _triggerMonsterHitFlash();
+        }
+
+        // 2. Boss death shake (10px / 0.4s)
+        if (_previousEnemyHp != null &&
+            _previousEnemyHp! > 0 &&
+            state.enemy.currentHp <= 0 &&
+            state.enemy.isBoss) {
+          _triggerShake(10.0, const Duration(milliseconds: 400));
+          SoundService.vibrateHeavy(isHapticEnabled: currPlayer.isHapticEnabled);
+          SoundService.playAlert(isSoundEnabled: currPlayer.isSoundEnabled);
+        }
+
+        // 3. Hero damage > 20% max HP shake (6px / 0.2s)
+        if (_previousHeroHp != null &&
+            (_previousHeroHp! - state.heroHp) >= (state.heroMaxHp * 0.20)) {
+          _triggerShake(6.0, const Duration(milliseconds: 200));
+          SoundService.vibrateHeavy(isHapticEnabled: currPlayer.isHapticEnabled);
+        }
+
+        // 4. Crit shake (4px / 0.15s)
+        final hasRecentCrit = state.floatingTexts
+            .any((t) => t.isCrit && (nowSec - t.createdAt) < 0.18);
+        if (hasRecentCrit && !_shakeController.isAnimating) {
+          _triggerShake(4.0, const Duration(milliseconds: 150));
+          SoundService.vibrateMedium(isHapticEnabled: currPlayer.isHapticEnabled);
+        }
+
+        // 5. Skill banner slide 0.6s + hitstop freeze 0.1s
+        if (state.activeSkillCastName != null &&
+            state.activeSkillCastName != _previousSkillCast) {
+          _skillBannerController.forward(from: 0.0);
+          SoundService.vibrateMedium(isHapticEnabled: currPlayer.isHapticEnabled);
+          // Hitstop freeze 0.1s
+          _battleService.setBattleSpeed(0.05);
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (mounted) _battleService.setBattleSpeed(_battleSpeed);
           });
         }
+
+        _previousEnemyHp = state.enemy.currentHp;
+        _previousHeroHp = state.heroHp;
+        _previousSkillCast = state.activeSkillCastName;
+
+        setState(() {
+          _currentState = state;
+        });
       },
       onBattleEnded: (finalState) {
         if (mounted) {
@@ -115,7 +237,15 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
       },
     );
     _battleService.setBattleSpeed(_battleSpeed);
-    _battleService.start();
+
+    // 0.5s battle start countdown
+    _prepTimer?.cancel();
+    _prepTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() => _isPreparingBattle = false);
+        _battleService.start();
+      }
+    });
   }
 
   void _handleBattleEnd(BattleState state) async {
@@ -158,13 +288,121 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
 
       await _showResultDialog(isWon: true, state: state, previousPlayer: player);
     } else if (state.isDefeated) {
+      ref.read(playerProvider.notifier).onBattleDefeat(
+            foughtZone: _currentZoneId,
+            foughtStage: _currentStage,
+          );
+      final updatedPlayer = ref.read(playerProvider);
+      SoundService.vibrateHeavy(isHapticEnabled: updatedPlayer.isHapticEnabled);
+      SoundService.playAlert(isSoundEnabled: updatedPlayer.isSoundEnabled);
+
       await _showResultDialog(isWon: false, state: state, previousPlayer: player);
+
+      final stageKey = '$_currentZoneId-$_currentStage';
+      final defeats = updatedPlayer.consecutiveDefeats[stageKey] ?? 0;
+      if (mounted && defeats >= 3) {
+        await _showDefeatSmartHintDialog();
+      }
     }
+  }
+
+  Future<void> _showDefeatSmartHintDialog() async {
+    await AppTheme.showScaleDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+        ),
+        title: Row(
+          children: [
+            const Text('💡 ', style: TextStyle(fontSize: 22)),
+            Text(
+              'GỢI Ý CHIẾN THUẬT',
+              style: GoogleFonts.cinzel(
+                color: AppTheme.goldAccent,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Ải này có sát thương vật lý và phòng thủ cao! Bạn có thể:\n\n'
+          '• Ép thêm Lục Ngọc (+DEF) hoặc Lam Ngọc (+HP) vào trang bị.\n'
+          '• Tẩy điểm thuộc tính dồn vào Thể Lực (VIT) để tăng giáp và máu.\n'
+          '• Ghé Lò Rèn để Nâng Cấp hoặc Tẩy Luyện thuộc tính đồ.\n'
+          '• Trang bị skill Hồi Máu hoặc Khiên Chắn!',
+          style: GoogleFonts.inter(fontSize: 12.5, color: Colors.white70, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
+            child: const Text('Đã hiểu', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _confirmExitBattle() async {
+    if (_currentState == null || !_currentState!.isFighting || _currentState!.isWon || _currentState!.isDefeated) {
+      return true;
+    }
+    final shouldExit = await AppTheme.showScaleDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.bgSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+        ),
+        title: Row(
+          children: [
+            const Text('⚠️ ', style: TextStyle(fontSize: 20)),
+            Text(
+              'Xác nhận rút lui?',
+              style: GoogleFonts.cinzel(
+                color: AppTheme.goldAccent,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Rời khỏi trận chiến bây giờ sẽ tính là bỏ cuộc và không nhận được phần thưởng. Bạn có chắc muốn rút lui?',
+          style: TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Ở lại chiến đấu', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.redAccent),
+            child: const Text('Rút lui', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    return shouldExit ?? false;
   }
 
   @override
   void dispose() {
+    _prepTimer?.cancel();
+    _monsterHitFlashTimer?.cancel();
     _breathingController.dispose();
+    _shakeController.dispose();
+    _lowHpController.dispose();
+    _skillBannerController.dispose();
     _battleService.stop();
     super.dispose();
   }
@@ -205,81 +443,102 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                     orElse: () => SeedEnemies.zones.first,
                   )));
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final nav = Navigator.of(context);
+        final shouldLeave = await _confirmExitBattle();
+        if (shouldLeave) {
+          _battleService.stop();
+          nav.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppTheme.bgDark,
       body: state == null
           ? const Center(child: CircularProgressIndicator(color: AppTheme.goldAccent))
-          : Stack(
-              children: [
-                // 1. ZONE BACKGROUND WITH AMBIENT DARK VIGNETTE
-                Positioned.fill(
-                  child: Opacity(
-                    opacity: 0.28,
-                    child: AssetMapping.safeImage(
-                      zone.bgAsset,
-                      fit: BoxFit.cover,
-                      fallbackEmoji: '🌲',
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFA0D0B14),
-                          Color(0x990D0B14),
-                          Color(0xFA0D0B14),
-                        ],
+          : Transform.translate(
+              offset: _shakeOffset,
+              child: Stack(
+                children: [
+                  // 1. ZONE BACKGROUND WITH AMBIENT DARK VIGNETTE
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: 0.28,
+                      child: AssetMapping.safeImage(
+                        zone.bgAsset,
+                        fit: BoxFit.cover,
+                        fallbackEmoji: '🌲',
                       ),
                     ),
                   ),
-                ),
-
-                // 2. MAIN BATTLE INTERFACE
-                SafeArea(
-                  child: Column(
-                    children: [
-                      // Top Bar: Zone info & small Retreat button
-                      _buildTopNavigationHeader(zone),
-
-                      // Symmetric Top Combatant Status Bars (Hero VS Monster)
-                      _buildTopCombatStatus(player, state),
-
-                      // Monster Active Modifiers Chips Row
-                      if (state.enemy.activeModifierBadges.isNotEmpty)
-                        _buildModifierBadgesRow(state.enemy),
-
-                      // Middle Combat Arena (Hero vs Monster with pedestals & breathing animation)
-                      Expanded(
-                        child: _buildCombatArena(player, state),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0xFA0D0B14),
+                            Color(0x990D0B14),
+                            Color(0xFA0D0B14),
+                          ],
+                        ),
                       ),
-
-                      // Bottom Equipped Skill Bar with Cooldown Sweep
-                      _buildBottomSkillBar(player, state),
-                    ],
+                    ),
                   ),
-                ),
 
-                // Floating Damage Overlay with black stroke
-                FloatingDamageOverlay(texts: state.floatingTexts),
+                  // 2. MAIN BATTLE INTERFACE
+                  SafeArea(
+                    child: Column(
+                      children: [
+                        // Top Bar: Zone info & small Retreat button
+                        _buildTopNavigationHeader(zone),
 
-                // Active Skill Banner or Diablo Enrage Banner
-                if (state.activeSkillCastName != null)
-                  _buildCenterSkillBanner(state.activeSkillCastName!),
+                        // Symmetric Top Combatant Status Bars (Hero VS Monster)
+                        _buildTopCombatStatus(player, state),
 
-                // Boss Telegraph Warning Banner (Red diagonal)
-                if (state.isTelegraphing && state.telegraphSkillName != null)
-                  _buildTelegraphDiagonalBanner(state.telegraphSkillName!),
+                        // Monster Active Modifiers Chips Row
+                        if (state.enemy.activeModifierBadges.isNotEmpty)
+                          _buildModifierBadgesRow(state.enemy),
 
-                // Floating Combat Log Icon & Collapsible Drawer
-                Positioned(
-                  bottom: 72,
-                  right: 16,
-                  child: FloatingActionButton.small(
-                    heroTag: 'combat_log_fab',
+                        // Middle Combat Arena (Hero vs Monster with pedestals & breathing animation)
+                        Expanded(
+                          child: _buildCombatArena(player, state),
+                        ),
+
+                        // Bottom Equipped Skill Bar with Cooldown Sweep
+                        _buildBottomSkillBar(player, state),
+                      ],
+                    ),
+                  ),
+
+                  // Floating Damage Overlay with black stroke
+                  FloatingDamageOverlay(texts: state.floatingTexts),
+
+                  // Active Skill Banner or Diablo Enrage Banner (Diagonal 30 deg slide)
+                  if (state.activeSkillCastName != null)
+                    _buildCenterSkillBanner(state.activeSkillCastName!),
+
+                  // Boss Telegraph Warning Banner (Red diagonal)
+                  if (state.isTelegraphing && state.telegraphSkillName != null)
+                    _buildTelegraphDiagonalBanner(state.telegraphSkillName!),
+
+                  // Low HP feedback border & dark vignette
+                  if (state.heroHp / state.heroMaxHp < 0.3)
+                    _buildLowHpIndicator(state.heroHp, state.heroMaxHp),
+
+                  // 0.5s Battle Start Countdown Overlay
+                  if (_isPreparingBattle)
+                    _buildBattleStartCountdown(),
+
+                  // Floating Combat Log Icon & Collapsible Drawer
+                  Positioned(
+                    bottom: 72,
+                    right: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'combat_log_fab',
                     backgroundColor: AppTheme.bgSurface,
                     shape: const CircleBorder(
                       side: BorderSide(color: AppTheme.goldAccent, width: 1.2),
@@ -299,6 +558,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                   _buildCombatLogDrawer(state),
               ],
             ),
+          ),
+      ),
     );
   }
 
@@ -312,9 +573,12 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back_ios, color: Colors.white70, size: 16),
-                onPressed: () {
-                  _battleService.stop();
-                  Navigator.pop(context);
+                onPressed: () async {
+                  final shouldLeave = await _confirmExitBattle();
+                  if (shouldLeave && mounted) {
+                    _battleService.stop();
+                    Navigator.pop(context);
+                  }
                 },
               ),
               Column(
@@ -443,10 +707,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
               // 3. Retreat button
               InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () {
+                onTap: () async {
                   HapticFeedback.lightImpact();
-                  _battleService.stop();
-                  Navigator.pop(context);
+                  final shouldLeave = await _confirmExitBattle();
+                  if (shouldLeave && mounted) {
+                    _battleService.stop();
+                    Navigator.pop(context);
+                  }
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -759,12 +1026,28 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
           ),
 
           // MONSTER SPRITE ON PEDESTAL
-          _buildCombatantColumn(
-            name: state.enemy.name,
-            assetPath: state.enemy.imageAsset,
-            fallbackEmoji: state.enemy.fallbackEmoji,
-            isBoss: state.enemy.isBoss,
-            isHero: false,
+          Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              _buildCombatantColumn(
+                name: state.enemy.name,
+                assetPath: state.enemy.imageAsset,
+                fallbackEmoji: state.enemy.fallbackEmoji,
+                isBoss: state.enemy.isBoss,
+                isHero: false,
+              ),
+              if (state.enemy.currentHp <= 0 || state.isWon)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: MonsterDeathParticles(
+                      auraColor: state.enemy.isBoss
+                          ? AppTheme.goldAccent
+                          : AppTheme.redAccent,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -811,10 +1094,22 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: AssetMapping.safeImage(
-                    assetPath,
-                    fit: BoxFit.contain,
-                    fallbackEmoji: fallbackEmoji,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: AssetMapping.safeImage(
+                          assetPath,
+                          fit: BoxFit.contain,
+                          fallbackEmoji: fallbackEmoji,
+                        ),
+                      ),
+                      if (!isHero && _isMonsterHitFlashing)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -940,39 +1235,124 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
   Widget _buildCenterSkillBanner(String bannerText) {
     final isDiablo = bannerText.contains('DIABLO');
 
-    return Positioned(
-      top: 150,
-      left: 20,
-      right: 20,
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDiablo
-                  ? [const Color(0xFF8B0000), AppTheme.redAccent]
-                  : [const Color(0xFFD97706), AppTheme.goldAccent],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: (isDiablo ? Colors.red : Colors.amber).withOpacity(0.6),
-                blurRadius: 20,
-                spreadRadius: 2,
+    return AnimatedBuilder(
+      animation: _skillBannerController,
+      builder: (ctx, child) {
+        final val = _skillBannerController.value;
+        final screenWidth = MediaQuery.of(context).size.width;
+        // Diagonal 30 deg banner slides from left to right across 0.6s
+        final xPos = (val - 0.5) * screenWidth * 2.2;
+
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: Center(
+              child: Transform.translate(
+                offset: Offset(xPos, 0),
+                child: Transform.rotate(
+                  angle: -30 * math.pi / 180, // chéo 30°
+                  child: Container(
+                    width: screenWidth * 1.6,
+                    height: 54,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isDiablo
+                            ? [
+                                Colors.transparent,
+                                const Color(0xFF8B0000).withOpacity(0.9),
+                                AppTheme.redAccent,
+                                const Color(0xFF8B0000).withOpacity(0.9),
+                                Colors.transparent,
+                              ]
+                            : [
+                                Colors.transparent,
+                                const Color(0xFFD97706).withOpacity(0.85),
+                                AppTheme.goldAccent,
+                                const Color(0xFFD97706).withOpacity(0.85),
+                                Colors.transparent,
+                              ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isDiablo ? Colors.redAccent : AppTheme.goldAccent).withOpacity(0.7),
+                          blurRadius: 24,
+                          spreadRadius: 3,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '⚡ $bannerText ⚡',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 2.0,
+                        shadows: const [
+                          Shadow(color: Colors.black, blurRadius: 6, offset: Offset(2, 2)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLowHpIndicator(int hp, int maxHp) {
+    final hpRatio = hp / maxHp;
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _lowHpController,
+          builder: (ctx, _) {
+            final borderOpacity = (0.15 + 0.15 * _lowHpController.value).clamp(0.15, 0.3);
+            return Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.red.withOpacity(borderOpacity),
+                  width: 4,
+                ),
+                gradient: hpRatio < 0.15
+                    ? RadialGradient(
+                        radius: 0.85,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.6),
+                        ],
+                      )
+                    : null,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBattleStartCountdown() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black45,
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppTheme.bgSurface.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTheme.goldAccent, width: 1.5),
+            boxShadow: AppTheme.goldGlow,
           ),
           child: Text(
-            bannerText,
+            '⚔️ Chuẩn bị chiến đấu...',
             style: GoogleFonts.cinzel(
               fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.goldAccent,
               letterSpacing: 1.0,
-              shadows: const [
-                Shadow(color: Colors.black, blurRadius: 6, offset: Offset(1, 1)),
-              ],
             ),
           ),
         ),
@@ -1215,6 +1595,42 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
                         backgroundColor: Colors.purple.shade900,
                         foregroundColor: Colors.white,
                         side: const BorderSide(color: Colors.purpleAccent, width: 1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Nút Chia Sẻ Thành Tích (Item 3.6)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        final stageStr = _enemy.zone == 99
+                            ? 'Tháp Vô Tận Tầng ${_enemy.stage}'
+                            : 'Ải ${_enemy.zone}-${_enemy.stage}';
+                        final shareText =
+                            'Tôi vừa đánh bại ${_enemy.name} tại $stageStr ở Level ${ref.read(playerProvider).level} trong Soul Gacha ARPG! 🔥';
+                        Clipboard.setData(ClipboardData(text: shareText));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            backgroundColor: AppTheme.bgSurface,
+                            content: Text('📋 Đã sao chép thành tích!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.share, size: 14, color: AppTheme.goldAccent),
+                      label: Text(
+                        '📋 CHIA SẺ THÀNH TÍCH',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.goldAccent,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppTheme.goldAccent, width: 1),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
@@ -1716,10 +2132,19 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
 
   Future<void> _checkPostBattleTutorials(bool isWon, bool hasDrops) async {
     final player = ref.read(playerProvider);
+    // If player has already made progress or played > 5 min, skip tutorials permanently
+    if (player.level > 1 ||
+        player.inventory.length > 2 ||
+        player.gold > 200 ||
+        player.highestEndlessFloor > 0) {
+      ref.read(playerProvider.notifier).skipAllTutorials();
+      return;
+    }
+
     if (isWon && !player.hasSeenTutorialFirstWin) {
       ref.read(playerProvider.notifier).markTutorialFirstWinSeen();
       if (!mounted) return;
-      await showDialog(
+      await AppTheme.showScaleDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
@@ -1746,9 +2171,17 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
           ),
           actions: [
+            TextButton(
+              onPressed: () {
+                SoundService.playClick();
+                ref.read(playerProvider.notifier).skipAllTutorials();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Bỏ qua tất cả', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            ),
             ElevatedButton(
               onPressed: () {
-                HapticFeedback.lightImpact();
+                SoundService.playClick();
                 Navigator.pop(ctx);
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
@@ -1763,7 +2196,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
     if (hasDrops && !updatedPlayer.hasSeenTutorialFirstDrop) {
       ref.read(playerProvider.notifier).markTutorialFirstDropSeen();
       if (!mounted) return;
-      await showDialog(
+      await AppTheme.showScaleDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
@@ -1786,13 +2219,21 @@ class _BattleScreenState extends ConsumerState<BattleScreen>
             ],
           ),
           content: Text(
-            'Vào tab Trang bị để xem.',
+            'Vào tab Trang bị để xem và mặc vào người.',
             style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
           ),
           actions: [
+            TextButton(
+              onPressed: () {
+                SoundService.playClick();
+                ref.read(playerProvider.notifier).skipAllTutorials();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Bỏ qua tất cả', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            ),
             ElevatedButton(
               onPressed: () {
-                HapticFeedback.lightImpact();
+                SoundService.playClick();
                 Navigator.pop(ctx);
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.blueAccent),

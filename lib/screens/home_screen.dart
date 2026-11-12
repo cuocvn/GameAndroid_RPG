@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,9 +7,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../data/asset_mapping.dart';
 import '../models/arena_rank.dart';
 import '../models/companion.dart';
+import '../models/offline_progress.dart';
 import '../models/player.dart';
 import '../providers/game_providers.dart';
+import '../services/sound_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/particle_effects.dart';
 import 'arena_screen.dart';
 import 'battle_screen.dart';
 import 'build_screen.dart';
@@ -47,16 +52,30 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _floatController;
   late Animation<double> _floatAnimation;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  bool _showSavedIndicator = false;
+  Timer? _autoSavePeriodicTimer;
+  Timer? _hideSavedIndicatorTimer;
+
+  void _triggerAutoSaveIndicator() {
+    if (!mounted) return;
+    setState(() => _showSavedIndicator = true);
+    _hideSavedIndicatorTimer?.cancel();
+    _hideSavedIndicatorTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (mounted) setState(() => _showSavedIndicator = false);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Floating hero animation
     _floatController = AnimationController(
@@ -76,16 +95,346 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    // Auto-save periodic indicator every 30s
+    _autoSavePeriodicTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _triggerAutoSaveIndicator();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkFirstTimeTutorial();
+      _checkOfflineProgress();
+      _triggerAutoSaveIndicator();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoSavePeriodicTimer?.cancel();
+    _hideSavedIndicatorTimer?.cancel();
     _floatController.dispose();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      ref.read(playerProvider.notifier).recordLastActiveTimestamp();
+    } else if (state == AppLifecycleState.resumed) {
+      _checkOfflineProgress();
+    }
+  }
+
+  void _checkOfflineProgress() {
+    final result = ref.read(playerProvider.notifier).calculateOfflineProgress();
+    if (result != null && mounted) {
+      _showOfflineProgressDialog(result);
+    }
+  }
+
+  Widget _buildMiniRewardBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 10, color: Colors.white70),
+      ),
+    );
+  }
+
+  void _showOfflineProgressDialog(OfflineProgressResult result) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF231A2B), Color(0xFF100B17)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppTheme.goldAccent, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.goldAccent.withOpacity(0.35),
+                  blurRadius: 18,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('🌙 ', style: TextStyle(fontSize: 24)),
+                      Flexible(
+                        child: Text(
+                          'TRONG LÚC BẠN VẮNG MẶT...',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.cinzel(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.goldAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Thời gian vắng mặt: ${result.formattedDuration}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  if (result.hadAutoFarm) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.autorenew, color: AppTheme.goldAccent, size: 16),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Ải Auto-Farm: ${result.stageName}',
+                                  style: GoogleFonts.cinzel(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Số trận thắng:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                              Text(
+                                '${result.battlesWon} trận',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.greenAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Kinh nghiệm:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                              Text(
+                                '+${result.expGained} EXP',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.purpleAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Vàng thu được:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                              Text(
+                                '+${result.goldGained} 🪙',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.goldAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (result.gemsGained > 0) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Đá quý:', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                                Text(
+                                  '+${result.gemsGained} 💎',
+                                  style: GoogleFonts.cinzel(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.cyanAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Loot & materials badges
+                    if (result.droppedItems.isNotEmpty) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '🎁 Trang bị rơi (${result.droppedItems.length} món):',
+                          style: GoogleFonts.cinzel(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.goldAccent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: result.droppedItems.map((item) {
+                          final rColor = AppTheme.getRarityColor(item.rarity);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: rColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: rColor, width: 1),
+                            ),
+                            child: Text(
+                              item.name,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: rColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Materials & Food
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        if ((result.droppedMaterials['iron'] ?? 0) > 0)
+                          _buildMiniRewardBadge('🔩 Sắt +${result.droppedMaterials['iron']}'),
+                        if ((result.droppedMaterials['crystal'] ?? 0) > 0)
+                          _buildMiniRewardBadge('💠 Pha Lê +${result.droppedMaterials['crystal']}'),
+                        if ((result.droppedMaterials['steel'] ?? 0) > 0)
+                          _buildMiniRewardBadge('🌑 Hắc Kim +${result.droppedMaterials['steel']}'),
+                        if ((result.droppedPetFoods['meat'] ?? 0) > 0)
+                          _buildMiniRewardBadge('🥩 Thịt +${result.droppedPetFoods['meat']}'),
+                        if ((result.droppedPetFoods['herb'] ?? 0) > 0)
+                          _buildMiniRewardBadge('🌿 Cỏ +${result.droppedPetFoods['herb']}'),
+                        if ((result.droppedPetFoods['beast_stone'] ?? 0) > 0)
+                          _buildMiniRewardBadge('💎 Đá Thú +${result.droppedPetFoods['beast_stone']}'),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Bạn chưa kích hoạt tính năng Auto-Farm tại ải nào trên Bản Đồ.\nHãy vào Bản Đồ và bấm "🔄 Auto-Farm" tại ải đã vượt qua để tự động nhận thưởng ngoại tuyến!',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white70, height: 1.4),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  if (result.staminaRegenerated > 0)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.goldAccent.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.flash_on, color: Colors.amberAccent, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Thể lực Raid hồi phục: +${result.staminaRegenerated} ⚡',
+                            style: GoogleFonts.cinzel(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.goldAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.goldAccent,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () {
+                        HapticFeedback.heavyImpact();
+                        ref.read(playerProvider.notifier).claimOfflineProgress(result);
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(
+                        'NHẬN TẤT CẢ PHẦN THƯỞNG',
+                        style: GoogleFonts.cinzel(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showSelectHeroSheet() {
@@ -214,10 +563,214 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  void _showSettingsDialog() {
+    AppTheme.showScaleDialog(
+      context: context,
+      builder: (ctx) {
+        return Consumer(
+          builder: (ctx, ref, _) {
+            final player = ref.watch(playerProvider);
+            return AlertDialog(
+              backgroundColor: AppTheme.bgSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(color: AppTheme.goldAccent, width: 1.5),
+              ),
+              title: Row(
+                children: [
+                  const Text('⚙️ ', style: TextStyle(fontSize: 20)),
+                  Text(
+                    'CÀI ĐẶT HỆ THỐNG',
+                    style: GoogleFonts.cinzel(
+                      color: AppTheme.goldAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    activeColor: AppTheme.goldAccent,
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Text('🔊', style: TextStyle(fontSize: 20)),
+                    title: const Text('Hiệu ứng Âm Thanh', style: TextStyle(fontSize: 13, color: Colors.white)),
+                    subtitle: Text(
+                      player.isSoundEnabled ? 'Đang bật âm thanh' : '🔇 Đã tắt âm thanh',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: player.isSoundEnabled ? Colors.white60 : Colors.redAccent,
+                      ),
+                    ),
+                    value: player.isSoundEnabled,
+                    onChanged: (val) {
+                      ref.read(playerProvider.notifier).toggleSound(val);
+                      if (val) SoundService.playClick();
+                    },
+                  ),
+                  const Divider(color: Colors.white10),
+                  SwitchListTile(
+                    activeColor: AppTheme.goldAccent,
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Text('📳', style: TextStyle(fontSize: 20)),
+                    title: const Text('Phản hồi Rung (Haptic)', style: TextStyle(fontSize: 13, color: Colors.white)),
+                    subtitle: Text(
+                      player.isHapticEnabled ? 'Đang bật rung khi đánh' : '📳 Đã tắt rung',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: player.isHapticEnabled ? Colors.white60 : Colors.redAccent,
+                      ),
+                    ),
+                    value: player.isHapticEnabled,
+                    onChanged: (val) {
+                      ref.read(playerProvider.notifier).toggleHaptic(val);
+                      if (val) SoundService.vibrateMedium();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('🎮 Tactical Idle RPG', style: GoogleFonts.cinzel(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.goldAccent)),
+                        const SizedBox(height: 2),
+                        const Text('• Phiên bản: 1.0.0 (Offline Flutter ARPG)', style: TextStyle(fontSize: 10, color: Colors.white70)),
+                        const Text('• Lưu dữ liệu: Hive Local Storage 100% Offline', style: TextStyle(fontSize: 10, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Backup & Restore (Save JSON)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final jsonStr = jsonEncode(player.toJson());
+                            await Clipboard.setData(ClipboardData(text: jsonStr));
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('📋 Đã sao chép Save JSON vào bộ nhớ tạm!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.copy, size: 14, color: AppTheme.goldAccent),
+                          label: const Text('Xuất JSON', style: TextStyle(color: AppTheme.goldAccent, fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppTheme.goldAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final data = await Clipboard.getData(Clipboard.kTextPlain);
+                            if (data?.text == null || data!.text!.trim().isEmpty) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('⚠️ Bộ nhớ tạm không có dữ liệu JSON!'),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                            try {
+                              final decoded = jsonDecode(data.text!) as Map<String, dynamic>;
+                              final imported = Player.fromJson(decoded);
+                              ref.read(playerProvider.notifier).setPlayer(imported);
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('✅ Đã nạp dữ liệu Save JSON thành công!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('❌ Dữ liệu JSON không hợp lệ: $e'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.paste, size: 14, color: Colors.cyanAccent),
+                          label: const Text('Nhập JSON', style: TextStyle(color: Colors.cyanAccent, fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.cyanAccent),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmResetProgress();
+                      },
+                      icon: const Icon(Icons.restart_alt, color: AppTheme.redAccent, size: 16),
+                      label: const Text('Khởi Động Lại Từ Đầu', style: TextStyle(color: AppTheme.redAccent, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppTheme.redAccent),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    SoundService.playClick();
+                    Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.goldAccent),
+                  child: const Text('Đóng', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _checkFirstTimeTutorial() {
     final player = ref.read(playerProvider);
+    // If player has progress or has played before, suppress all tutorials
+    if (player.level > 1 ||
+        player.inventory.isNotEmpty ||
+        player.gold > 100 ||
+        player.highestEndlessFloor > 0) {
+      ref.read(playerProvider.notifier).skipAllTutorials();
+      return;
+    }
+
     if (!player.hasSeenTutorialHome) {
-      showDialog(
+      AppTheme.showScaleDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
@@ -244,9 +797,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             style: GoogleFonts.inter(fontSize: 13, color: Colors.white70, height: 1.4),
           ),
           actions: [
+            TextButton(
+              onPressed: () {
+                SoundService.playClick();
+                ref.read(playerProvider.notifier).skipAllTutorials();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Bỏ qua tất cả', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            ),
             ElevatedButton(
               onPressed: () {
-                HapticFeedback.lightImpact();
+                SoundService.playClick();
                 ref.read(playerProvider.notifier).markTutorialHomeSeen();
                 Navigator.pop(ctx);
               },
@@ -530,79 +1091,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  void _showSettingsDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.bgSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Colors.white24, width: 1.5),
-        ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.settings, color: Colors.white70, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'CÀI ĐẶT & THÔNG TIN',
-                  style: GoogleFonts.cinzel(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14.5,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white60, size: 20),
-              onPressed: () => Navigator.pop(ctx),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black38,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('🎮 Tactical Idle RPG (Android Offline)', style: GoogleFonts.cinzel(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.goldAccent)),
-                  const SizedBox(height: 4),
-                  const Text('• Phiên bản: 1.0.0 (Flutter + Dart)', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                  const Text('• Lưu dữ liệu: Hive Local Storage 100% Offline', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                  const Text('• Rung phản hồi: Tự động kích hoạt khi đánh & chí mạng', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _confirmResetProgress();
-                },
-                icon: const Icon(Icons.restart_alt, color: AppTheme.redAccent, size: 18),
-                label: const Text('Khởi Động Lại Từ Đầu', style: TextStyle(color: AppTheme.redAccent, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppTheme.redAccent),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   void _confirmResetProgress() {
     showDialog(
@@ -821,6 +1310,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final canPrestigeNow = player.level >= 30 || player.highestEndlessFloor >= 15;
 
     final hasPendingPoints = player.statPoints > 0 || player.skillPoints > 0;
+    final hasUnequippedNewGear = player.lastInventoryAcquiredTime > 0 &&
+        (DateTime.now().millisecondsSinceEpoch - player.lastInventoryAcquiredTime) > 60000 &&
+        player.inventory.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
@@ -1009,6 +1501,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         icon: '💎',
                         amount: '${player.gems}',
                         color: AppTheme.blueAccent,
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Auto-Save Indicator (Item 3.5)
+                      AnimatedOpacity(
+                        opacity: _showSavedIndicator ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 350),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.greenAccent.withOpacity(0.6), width: 1),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('💾 ', style: TextStyle(fontSize: 10)),
+                              Text(
+                                'Đã lưu',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.greenAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
 
@@ -1424,58 +1945,109 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   const SizedBox(height: 8),
                 ],
 
-                // 4. PULSING "CHIẾN ĐẤU" CTA BUTTON
-                ScaleTransition(
-                  scale: _pulseAnimation,
-                  child: Container(
-                    width: MediaQuery.of(context).size.width * 0.85,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.goldButtonGradient,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.goldAccent.withOpacity(0.4),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
+                if (player.isAutoFarming) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (ctx) => BattleScreen(
-                              zoneId: player.currentZone,
-                              stage: player.currentStage,
-                            ),
-                          ),
+                          MaterialPageRoute(builder: (ctx) => const MapScreen()),
                         );
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2C2210),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.goldAccent, width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.goldAccent.withOpacity(0.2),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.autorenew, color: AppTheme.goldAccent, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '🔄 Đang farm: Ải ${player.autoFarmZone}-${player.autoFarmStage}',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.goldAccent,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.arrow_forward_ios, size: 11, color: AppTheme.goldAccent),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.sports_martial_arts, color: Colors.black, size: 24),
-                          const SizedBox(width: 10),
-                          Text(
-                            'CHIẾN ĐẤU (ẢI ${player.currentZone}-${player.currentStage})',
-                            style: GoogleFonts.cinzel(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.black,
-                              letterSpacing: 0.5,
-                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                // 4. PULSING "CHIẾN ĐẤU" CTA BUTTON WITH FIRE SPARKS
+                ScaleTransition(
+                  scale: _pulseAnimation,
+                  child: ButtonFireSparks(
+                    child: Container(
+                      width: MediaQuery.of(context).size.width * 0.85,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.goldButtonGradient,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.goldAccent.withOpacity(0.4),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
                           ),
                         ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          SoundService.vibrateMedium(isHapticEnabled: player.isHapticEnabled);
+                          SoundService.playClick(isSoundEnabled: player.isSoundEnabled);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (ctx) => BattleScreen(
+                                zoneId: player.currentZone,
+                                stage: player.currentStage,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.sports_martial_arts, color: Colors.black, size: 24),
+                            const SizedBox(width: 10),
+                            Text(
+                              'CHIẾN ĐẤU (ẢI ${player.currentZone}-${player.currentStage})',
+                              style: GoogleFonts.cinzel(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.black,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1540,6 +2112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           label: 'Đấu Trường',
                           isUnlocked: player.level >= 10 || player.highestEndlessFloor >= 5,
                           unlockReqText: 'Mở khóa ở Lv.10 hoặc Tháp F5',
+                          hasBadge: player.hasUnclaimedSeasonMilestones,
                           onTap: () {
                             HapticFeedback.lightImpact();
                             Navigator.push(
@@ -1584,8 +2157,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           icon: Icons.tune,
                           label: 'Nhân Vật',
                           isUnlocked: true,
-                          hasBadge: hasPendingPoints,
-                          badgeCount: player.statPoints + player.skillPoints,
+                          hasBadge: hasPendingPoints || hasUnequippedNewGear,
+                          badgeCount: (player.statPoints + player.skillPoints) > 0
+                              ? (player.statPoints + player.skillPoints)
+                              : (hasUnequippedNewGear ? 1 : 0),
                           onTap: () {
                             HapticFeedback.lightImpact();
                             Navigator.push(
